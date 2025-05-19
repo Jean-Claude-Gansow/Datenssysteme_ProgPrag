@@ -9,6 +9,27 @@ typedef struct dataSet_t
     unsigned int width {0};
 } dataSet;
 
+
+template <unsigned int N,typename t>
+struct tuple_t {
+    t data[N];
+
+    // Optional: Zugriffsfunktion
+    t& operator[](unsigned int index) 
+    {
+        return data[index];
+    }
+
+    const t& operator[](unsigned int index) const 
+    {
+        return data[index];
+    }
+};
+
+
+typedef tuple_t<2,int> pair,match;
+typedef pair** block_t;
+
 typedef struct matching_t
 {
     match* matches;
@@ -24,26 +45,5 @@ typedef struct matching_t
         return matches[index];
     }
 } matching;
-
-
-template <unsigned int N,typename t>
-struct tuple_t {
-    t data[N];
-
-    // Optional: Zugriffsfunktion
-    t& operator[](std::size_t index) 
-    {
-        return data[index];
-    }
-
-    const t& operator[](std::size_t index) const 
-    {
-        return data[index];
-    }
-};
-
-
-typedef tuple_t<2,int> pair,match;
-typedef pair** block_t;
 
 #endif

@@ -9,16 +9,13 @@
 
 class Blocking_mngr 
 {
-   
-
-
 private:
     unsigned short blockSize;
 
 public:
-    Blocking_mngr();
-    Blocking_mngr(unsigned int blockSize);
-    ~Blocking_mngr();
+    Blocking_mngr(){}
+    Blocking_mngr(unsigned int blockSize){}
+    ~Blocking_mngr(){}
 
 public:
     block_t* generateBlocks(unsigned int len, unsigned int Threads); //generate block by generating and ordering blocklines within threads
