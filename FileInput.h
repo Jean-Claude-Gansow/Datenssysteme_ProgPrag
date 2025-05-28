@@ -37,34 +37,50 @@ char* mmap_file(const char* filename, size_t& filesize) {
     return (data == MAP_FAILED) ? nullptr : data;
 }
 
-void munmap_file(char* addr, size_t filesize) {
-    munmap(addr, filesize);
+// Gibt einen Zeiger auf den Anfang der letzten Zeile zurück
+inline const char* find_last_line(char* file, size_t file_size) {
+    // Starte am letzten Zeichen vor Dateiende
+    ssize_t i = file_size - 2; // -1: letztes gültiges Zeichen, -2: vor '\0' oder EOF
+    while (i >= 0 && file[i] != '\n') --i;
+    return file + i + 1; // +1: Anfang der letzten Zeile
 }
 
+void cleanse(char* line) {
+    // Beispiel: Alles in Kleinbuchstaben und unerwünschte Zeichen entfernen
+    for (char* p = line; *p; ++p) {
+        if (*p >= 'A' && *p <= 'Z') *p = *p - 'A' + 'a';
+        // Beispiel: Entferne Steuerzeichen außer \n und \0
+        if (*p < 32 && *p != '\n' && *p != '\0') *p = ' ';
+    }
+}
+
+
+template <typename T>
 void* readFile(const char* filename,const char* format)
 {
     /* do the data cleaning and storing for later usage here*/
     size_t file_size = 0;
     char* file = mmap_file(filename,file_size);
 
-    auto parser = parser_mngr->create_parser("%_,%s");
+    auto parse_line = parser_mngr->create_parser("%_,%s");
 
     size_t line_start = 0;
     size_t line_idx = 0;
-    
-    printf("attempting data parsing on %d bytes...\n");
+
+    dataSet<T>* dataSet = new dataSet<T>(); 
+    const char* ll = find_last_line(file, file_size); // find the last line to read its numerical id
+    long lines = strtod(ll);
+    dataSet->data = (T*)malloc(sizeof(T) * lines); // allocate space for all lines
+    printf("attempting data parsing @ %p for %ld lines ...\n",file,lines);   
 
     for (size_t i = 0; i < file_size-1; ++i) 
     {
-        if (file[i] == '\n')  // arbeite um zu data cleaning switch
+        if (file[i] == '\n')  // umarbeiten zu data cleaning switch
         {
-            file[i] = '\0'; // Zeile terminieren
-            void* out[10];  // Passe Anzahl an Format an
-            parser(&file[line_start], out);
-
-            // Beispiel: Zugriff auf Werte
-            // char* name = (char*)out[0];
-            // float wert = *(float*)out[1];
+            file[i] = '\0'; // Zeile terminieren// Beispiel: Zugriff auf Werte
+            void* out = dataSet[]; // Speicher für die Ausgabe reservieren
+            
+            parse_line(&file[line_start], out);
 
             line_start = i + 1;
             ++line_idx;

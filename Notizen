@@ -23,3 +23,5 @@ data Cleaning: first order operatons: all tolower, remove everything thats less 
 data Cleaning: allocation time reduction: string buffer already has all the 
 
 
+TODO:
+parser funktion um in-cycle cleaning mit der lookup tabelle erweitern *p = lookup[(unsigned char)*p]

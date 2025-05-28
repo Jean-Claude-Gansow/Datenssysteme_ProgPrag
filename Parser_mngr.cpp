@@ -1,6 +1,6 @@
 #include "Parser_mngr.h"
 
-using ParserFunc = void(*)(const char* line, void** out);
+using ParserFunc = size_t(*)(const char* line, void** out);
 
 ParserFunc Parser_mngr::create_parser(const std::string& format) {
     // 1. Code generieren (Beispiel, passe an dein Format an)
@@ -54,7 +54,7 @@ void* Parser_mngr::load_func(const std::string& func_name, const std::string& sy
 std::string Parser_mngr::generate_code(const std::string& func_name, const std::string& format) {
     std::stringstream code;
     code << "#include <cstring>\n"
-         << "extern \"C\" void " << func_name << "(char* line, void** out) {\n"
+         << "extern \"C\" size_t " << func_name << "(char* line, void** out) {\n"
          << "    char* p = line;\n"
          << "    char* end = nullptr;\n";
 
@@ -108,7 +108,7 @@ std::string Parser_mngr::generate_code(const std::string& func_name, const std::
         }
     }
 
-    code << "}\n";
+    code << "return p - line;\n}\n";
     return code.str();
 }
 
