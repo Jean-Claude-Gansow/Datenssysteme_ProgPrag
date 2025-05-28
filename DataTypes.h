@@ -1,14 +1,30 @@
 #ifndef DUPLICATE_DETECTION_DATATYPES
 #define DUPLICATE_DETECTION_DATATYPES
 
-
-typedef struct dataSet_t
+template <typename t>
+struct dataSet
 {
-    char** Cells {0};
-    unsigned int len {0};
-    unsigned int width {0};
-} dataSet;
+    t* data;
+    unsigned long size;
+    const t operator[](unsigned int index) const 
+    {
+        return data[index];
+    }
+    t* c_arr()
+    {
+        return data;
+    }
+};
 
+struct Storage_Device
+{
+
+    char* name;
+    float price;
+    char* brand;
+    char* desc;
+    char* category;
+};
 
 template <unsigned int N,typename t>
 struct tuple_t {
@@ -25,7 +41,6 @@ struct tuple_t {
         return data[index];
     }
 };
-
 
 typedef tuple_t<2,int> pair,match;
 typedef pair** block_t;

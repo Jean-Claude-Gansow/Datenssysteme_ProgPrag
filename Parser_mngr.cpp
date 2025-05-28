@@ -1,0 +1,129 @@
+#include "Parser_mngr.h"
+
+using ParserFunc = void(*)(const char* line, void** out);
+
+ParserFunc Parser_mngr::create_parser(const std::string& format) {
+    // 1. Code generieren (Beispiel, passe an dein Format an)
+
+    std::string name = "parser_" + std::to_string(parsers.size());
+    
+    std::string code = generate_code(name,format);
+
+    // 2. Kompilieren
+    compile_code(code, name);
+
+    // 3. Laden
+    void* fn_ptr = load_func(name, name); // "parse_line" ist der Name der generierten Funktion
+    
+    // 4. Cast und speichern
+    ParserFunc fn = reinterpret_cast<ParserFunc>(fn_ptr);
+    parsers.push_back(fn);
+
+    return fn;
+}
+
+void* Parser_mngr::load_func(const std::string& func_name, const std::string& symbol) 
+{
+    printf("loading function...\n");
+    std::string sofile = func_name + ".so";
+    std::string abs_path = std::filesystem::absolute("parser_0.so").string();
+    
+    void* handle = dlopen(abs_path.c_str(), RTLD_NOW);
+
+    if (!handle) {
+        throw std::runtime_error("Fehler beim Laden von " + sofile + ": " + dlerror());
+    }
+
+    dlerror(); // Clear any existing error
+    void* sym = dlsym(handle, symbol.c_str());
+    const char* dlsym_error = dlerror();
+    if (dlsym_error) {
+        dlclose(handle);
+        throw std::runtime_error("Fehler beim Laden des Symbols " + symbol + ": " + dlsym_error);
+    }
+
+   
+
+    hSoFile.push_back(handle); // Optional: handle verwalten für späteres dlclose()
+
+    printf("done loading...\n");
+
+    return sym;
+}
+
+std::string Parser_mngr::generate_code(const std::string& func_name, const std::string& format) {
+    std::stringstream code;
+    code << "#include <cstring>\n"
+         << "extern \"C\" void " << func_name << "(char* line, void** out) {\n"
+         << "    char* p = line;\n"
+         << "    char* end = nullptr;\n";
+
+    int arg_index = 0;
+    for (size_t i = 0; i < format.size(); ++i) {
+        if (format[i] == '%') {
+            ++i;
+            if (i >= format.size()) break;
+            switch (format[i]) {
+                case '_':
+                    code << "    // Skip field\n";
+                    code << "    if (*p == '\"')\n\t{\n"
+                         << "        p = strchr(p + 1, '\"');\n"
+                         << "        if (p) p = strchr(p + 1, ',');\n"
+                         << "    }\n\telse\n\t{\n"
+                         << "        p = strchr(p, ',');\n"
+                         << "    }\n"
+                         << "    if (p) ++p;\n";
+                    break;
+                case 's':
+                    code << "    if (*p == '\"')\n\t{\n"
+                         << "        ++p;\n"
+                         << "        end = strchr(p, '\"');\n"
+                         << "        if (end) *end = '\\0';\n"
+                         << "        ((char**)out[" << arg_index << "])[0] = p;\n"
+                         << "        p = end + 1;\n"
+                         << "        if (*p == ',') ++p;\n"
+                         << "    }\n\telse\n\t{\n"
+                         << "        end = strchr(p, ',');\n"
+                         << "        if (!end) end = p + strlen(p);\n"
+                         << "        ((char**)out[" << arg_index << "])[0] = p;\n"
+                         << "        if (*end != '\\0') *end = '\\0';\n"
+                         << "        p = (*end == ',') ? end + 1 : end;\n"
+                         << "    }\n";
+                    ++arg_index;
+                    break;
+                case 'd':
+                    code << "    ((int*)out[" << arg_index << "])[0] = atoi(p);\n";
+                    code << "    p = strchr(p, ',');\n"
+                         << "    if (p) ++p;\n";
+                    ++arg_index;
+                    break;
+                case 'f':
+                    code << "    ((float*)out[" << arg_index << "])[0] = strtof(p, &end);\n";
+                    code << "    p = (*end == ',') ? end + 1 : end;\n";
+                    ++arg_index;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    code << "}\n";
+    return code.str();
+}
+
+
+void Parser_mngr::compile_code(const std::string& cpp_code, const std::string& name) 
+{
+    std::string filename = name + ".cpp";
+    std::string sofile = name + ".so";
+
+    std::ofstream out(filename);
+    out << cpp_code;
+    out.close();
+
+    std::string cmd = "g++ -std=c++17 -O3 -fPIC -shared -nostdlib -nodefaultlibs " + filename + " -o " + sofile + " -lc";
+    if (system(cmd.c_str()) != 0) {
+        throw std::runtime_error("Compilerfehler bei: " + filename);
+    }
+}

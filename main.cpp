@@ -10,9 +10,7 @@
 #include "FileInput.h"
 #include "DataTypes.h"
 
-dataSet DS1;
-dataSet DS2;
-char* files[] = 
+std::string files[] = 
 {
     "../data/Z1.cvs",
     "../data/Z2.cvs",
@@ -21,13 +19,12 @@ char* files[] =
 };
 
 int main(int argc, char** argv)
-{
+{   
     
-    
-    printf("Reading Dataset: Laptops from path: %s\n",files[0]);
-    printf("Reading Dataset: Storage from path: %s\n",files[1]);
-    printf("Reading Dataset: Laptops-Solution from path: %s\n",files[2]);
-    printf("Reading Dataset: Storage-Solution from path: %s\n",files[3]);
+    printf("Reading Dataset: Laptops from path: %s\n",files[0].c_str());
+    printf("Reading Dataset: Storage from path: %s\n",files[1].c_str());
+    printf("Reading Dataset: Laptops-Solution from path: %s\n",files[2].c_str());
+    printf("Reading Dataset: Storage-Solution from path: %s\n",files[3].c_str());
 
     Blocking_mngr* m_blocking_mngr = new Blocking_mngr();
     Matching_mngr* m_matching_mngr = new Matching_mngr();
@@ -40,13 +37,11 @@ int main(int argc, char** argv)
     int start = clock();
 
     //run cvs file input, track time in ms
-    dataSet* dataSet1 = readCSV(files[0],"%_,%s");
-    dataSet* dataSet2 = readCSV(files[1],"%_,%s,%d");
+    dataSet<char*>* dataSet1 = (dataSet<char*>*)readFile(files[0].c_str(),"%_,%s");
+    dataSet<struct Storage_Device>* dataSet2 = (dataSet<struct Storage_Device>*)readFile(files[1].c_str(),"%_,%s,%d");
 
-    match* dataSetSol1; 
-    readFormat<match>(files[2],"%d,%d",dataSetSol1);
-    match* dataSetSol2;
-    readFormat<match>(files[3],"%d,%d",dataSetSol2);
+    dataSet<match>* dataSetSol1 = (dataSet<match>*)readFile(files[2].c_str(),"%d,%d");
+    dataSet<match>* dataSetSol2 = (dataSet<match>*)readFile(files[3].c_str(),"%d,%d");
 
     printf("time elapsed for reading Files: %ld ms\n", clock()-start);
 
@@ -54,8 +49,8 @@ int main(int argc, char** argv)
 
     printf("generating Blocks...\n");
 
-    block_t* blocksDS1 = m_blocking_mngr->generateBlocks(dataSet1->len,maxThreads); //fails because dataSet::len isnt filled ATMs.
-    block_t* blocksDS2 = m_blocking_mngr->generateBlocks(dataSet2->len,maxThreads);
+    block_t* blocksDS1 = m_blocking_mngr->generateBlocks(dataSet1->size,maxThreads); //fails because dataSet::len isnt filled ATMs.
+    block_t* blocksDS2 = m_blocking_mngr->generateBlocks(dataSet2->size,maxThreads);
 
     printf("generating matching...\n");
 
@@ -64,8 +59,8 @@ int main(int argc, char** argv)
 
     printf("time elapsed for finding matches: %ld", clock()-start);
 
-    float DS1EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS1, dataSetSol1, maxThreads);
-    float DS2EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS2, dataSetSol2, maxThreads);
+    float DS1EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS1, dataSetSol1->c_arr(), maxThreads);
+    float DS2EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS2, dataSetSol2->c_arr(), maxThreads);
     
     printf("Evaluation of Duplicate Detection within DataSet1: %f\n", DS1EvaluationScore);
     printf("Evaluation of Duplicate Detection within DataSet2: %f\n", DS2EvaluationScore);

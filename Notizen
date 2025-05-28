@@ -16,6 +16,10 @@ goto loop_lable | return lable; #test whether we can calulate an adress, so that
 return_lable:
 return 0;
 
+formated CSV: 
+dynamic compile functions, 
 
 data Cleaning: first order operatons: all tolower, remove everything thats less than numerial representation of 'a' (65).
 data Cleaning: allocation time reduction: string buffer already has all the 
+
+
