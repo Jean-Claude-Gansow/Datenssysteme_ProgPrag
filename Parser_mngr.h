@@ -12,7 +12,7 @@
 
 #include <filesystem>
 
-using ParserFunc = size_t(*)(const char* line, void** out);
+using ParserFunc = size_t(*)(const char* line, void* out);
 
 class Parser_mngr 
 {

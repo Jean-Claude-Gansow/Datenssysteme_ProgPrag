@@ -1,6 +1,6 @@
 #include "Parser_mngr.h"
 
-using ParserFunc = size_t(*)(const char* line, void** out);
+using ParserFunc = size_t(*)(const char* line, void* out);
 
 ParserFunc Parser_mngr::create_parser(const std::string& format) {
     // 1. Code generieren (Beispiel, passe an dein Format an)
@@ -26,8 +26,10 @@ void* Parser_mngr::load_func(const std::string& func_name, const std::string& sy
 {
     printf("loading function...\n");
     std::string sofile = func_name + ".so";
-    std::string abs_path = std::filesystem::absolute("parser_0.so").string();
+    std::string abs_path = std::filesystem::absolute(sofile).string();
     
+    printf("attempting to open file: %s\n",abs_path.c_str());
+
     void* handle = dlopen(abs_path.c_str(), RTLD_NOW);
 
     if (!handle) {
@@ -54,17 +56,22 @@ void* Parser_mngr::load_func(const std::string& func_name, const std::string& sy
 std::string Parser_mngr::generate_code(const std::string& func_name, const std::string& format) {
     std::stringstream code;
     code << "#include <cstring>\n"
+         << "#include <cstdint>\n"
+         << "#include <cstdlib>\n"
+         << "#include <stdio.h>\n"
          << "#include \"constants.h\"\n"
-         << "char* find_and_clean(char* p, char target)\n{\n"
-         << "   while (*p && *p != target)\n\t{\n"
-         << "       *p = lut[(unsigned char)*p];\n"
-         << "       ++p;\n"
+         << "extern \"C\" char* find_and_clean(char* p, char target)\n{\n"
+         << "   while (*p && *p != target)\n" 
+         << "   {\n" 
+         << "       printf(\"%p -- %c : %c \\n\",p,*p,lut[*p]);\n"
+         << "       *p = lut[(unsigned char)*p]; ++p;\n"
          << "   }\n"
          << "   return (*p == target) ? p : nullptr;\n"
          << "}\n\n"
-         << "extern \"C\" size_t " << func_name << "(char* line, void** out) {\n"
+         << "extern \"C\" size_t " << func_name << "(char* line, void* out) {\n"
          << "    char* p = line;\n"
-         << "    char* end = nullptr;\n";
+         << "    char* end = nullptr;\n"
+         << "    uintptr_t* fields = (uintptr_t*)out;\n";
 
     int arg_index = 0;
     for (size_t i = 0; i < format.size(); ++i) {
@@ -74,39 +81,42 @@ std::string Parser_mngr::generate_code(const std::string& func_name, const std::
             switch (format[i]) {
                 case '_':
                     code << "    // Skip field\n";
-                    code << "    if (*p == '\"')\n\t{\n"
+                    code << "    if (*p == '\"') {\n"
                          << "        p = strchr(p + 1, '\"');\n"
                          << "        if (p) p = strchr(p + 1, ',');\n"
-                         << "    }\n\telse\n\t{\n"
+                         << "    } else {\n"
                          << "        p = strchr(p, ',');\n"
                          << "    }\n"
                          << "    if (p) ++p;\n";
                     break;
                 case 's':
-                    code << "    if (*p == '\"')\n\t{\n"
+                    code << "    if (*p == '\"') {\n"
                          << "        ++p;\n"
                          << "        end = find_and_clean(p, '\"');\n"
                          << "        if (end) *end = '\\0';\n"
-                         << "        ((char**)out[" << arg_index << "])[0] = p;\n"
+                         << "        fields[" << arg_index << "] = (uintptr_t)p;\n"
                          << "        p = end + 1;\n"
                          << "        if (*p == ',') ++p;\n"
-                         << "    }\n\telse\n\t{\n"
+                         << "    } else {\n"
                          << "        end = find_and_clean(p, ',');\n"
                          << "        if (!end) end = p + strlen(p);\n"
-                         << "        ((char**)out[" << arg_index << "])[0] = p;\n"
+                         << "        fields[" << arg_index << "] = (uintptr_t)p;\n"
                          << "        if (*end != '\\0') *end = '\\0';\n"
                          << "        p = (*end == ',') ? end + 1 : end;\n"
                          << "    }\n";
                     ++arg_index;
                     break;
                 case 'd':
-                    code << "    ((int*)out[" << arg_index << "])[0] = atoi(p);\n";
+                    code << "    fields[" << arg_index << "] = (uintptr_t)atoi(p);\n";
                     code << "    p = strchr(p, ',');\n"
                          << "    if (p) ++p;\n";
                     ++arg_index;
                     break;
                 case 'f':
-                    code << "    ((float*)out[" << arg_index << "])[0] = strtof(p, &end);\n";
+                    code << "    float tmp_f = strtof(p, &end);\n";
+                    code << "    uintptr_t tmp_bits;\n"
+                         << "    memcpy(&tmp_bits, &tmp_f, sizeof(float));\n"
+                         << "    fields[" << arg_index << "] = tmp_bits;\n";
                     code << "    p = (*end == ',') ? end + 1 : end;\n";
                     ++arg_index;
                     break;
@@ -116,7 +126,7 @@ std::string Parser_mngr::generate_code(const std::string& func_name, const std::
         }
     }
 
-    code << "return p - line;\n}\n";
+    code << "    return p - line;\n}\n";
     return code.str();
 }
 

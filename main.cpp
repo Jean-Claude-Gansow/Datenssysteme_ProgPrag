@@ -2,8 +2,9 @@
 #include <filesystem>
 #include <string.h>
 #include <thread>
+#include <time.h>
 
-#include "time.h"
+#include "constants.h"
 #include "Evaluation_mngr.h"
 #include "Blocking_mngr.h"
 #include "Matching_mngr.h"
@@ -12,10 +13,10 @@
 
 std::string files[] = 
 {
-    "../data/Z1.cvs",
-    "../data/Z2.cvs",
-    "../data/ZY1.cvs",
-    "../data/ZY2.cvs"
+    "../data/Z1.csv",
+    "../data/Z2.csv",
+    "../data/ZY1.csv",
+    "../data/ZY2.csv"
 };
 
 int main(int argc, char** argv)
@@ -38,7 +39,7 @@ int main(int argc, char** argv)
 
     //run cvs file input, track time in ms
     dataSet<char*>* dataSet1 = (dataSet<char*>*)readFile<char*>(files[0].c_str(),"%_,%s");
-    dataSet<struct Storage_Device>* dataSet2 = (dataSet<struct Storage_Device>*)readFile<Storage_Device>(files[1].c_str(),"%_,%s,%d");
+    dataSet<storage>* dataSet2 = (dataSet<storage>*)readFile<storage>(files[1].c_str(),"%_,%s,%f,%s,%s,%s");
 
     dataSet<match>* dataSetSol1 = (dataSet<match>*)readFile<match>(files[2].c_str(),"%d,%d");
     dataSet<match>* dataSetSol2 = (dataSet<match>*)readFile<match>(files[3].c_str(),"%d,%d");

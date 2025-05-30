@@ -1,6 +1,8 @@
 #ifndef DUPLICATE_DETECTION_DATATYPES
 #define DUPLICATE_DETECTION_DATATYPES
 
+#include <cstdint>
+
 template <typename t>
 struct dataSet
 {
@@ -14,16 +16,6 @@ struct dataSet
     {
         return data;
     }
-};
-
-struct Storage_Device
-{
-
-    char* name;
-    float price;
-    char* brand;
-    char* desc;
-    char* category;
 };
 
 template <unsigned int N,typename t>
@@ -42,6 +34,7 @@ struct tuple_t {
     }
 };
 
+typedef tuple_t<5,uintptr_t> storage;
 typedef tuple_t<2,int> pair,match;
 typedef pair** block_t;
 

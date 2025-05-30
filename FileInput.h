@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <cstdio>
+#include <filesystem>
 
 //
 // Created by Jean-Claude on 19.05.2025.
@@ -21,20 +22,45 @@
 
 Parser_mngr* parser_mngr = new Parser_mngr();
 
+std::string make_absolute_path(const std::string& rel_path) 
+{
+    // canonical entfernt auch ".." und "." aus dem Pfad, falls die Datei existiert
+    // absolute macht nur einen absoluten Pfad daraus, lässt aber ".." stehen
+    try {
+        return std::filesystem::canonical(rel_path).string();
+    } catch (const std::filesystem::filesystem_error&) {
+        // Fallback: absolute, falls Datei noch nicht existiert
+        return std::filesystem::absolute(rel_path).string();
+    }
+}
+
 char* mmap_file(const char* filename, size_t& filesize) {
     int fd = open(filename, O_RDONLY);
-    if (fd == -1) return nullptr;
+    if (fd == -1) {
+        perror("open");
+        return nullptr;
+    }
 
     struct stat sb;
     if (fstat(fd, &sb) == -1) {
+        perror("fstat");
         close(fd);
         return nullptr;
     }
     filesize = sb.st_size;
+    if (filesize == 0) {
+        fprintf(stderr, "Datei ist leer!\n");
+        close(fd);
+        return nullptr;
+    }
 
     char* data = (char*)mmap(nullptr, filesize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if (data == MAP_FAILED) {
+        perror("mmap");
+        data = nullptr;
+    }
     close(fd);
-    return (data == MAP_FAILED) ? nullptr : data;
+    return data;
 }
 
 // Gibt einen Zeiger auf den Anfang der letzten Zeile zurück
@@ -45,47 +71,44 @@ inline const char* find_last_line(char* file, size_t file_size) {
     return file + i + 1; // +1: Anfang der letzten Zeile
 }
 
-void cleanse(char* line) {
-    // Beispiel: Alles in Kleinbuchstaben und unerwünschte Zeichen entfernen
-    for (char* p = line; *p; ++p) {
-        if (*p >= 'A' && *p <= 'Z') *p = *p - 'A' + 'a';
-        // Beispiel: Entferne Steuerzeichen außer \n und \0
-        if (*p < 32 && *p != '\n' && *p != '\0') *p = ' ';
-    }
-}
-
 
 template <typename T>
 void* readFile(const char* filename,const char* format)
 {
     /* do the data cleaning and storing for later usage here*/
     size_t file_size = 0;
-    char* file = mmap_file(filename,file_size);
+    std::string absolutePath = make_absolute_path(filename);
+    
+    printf("attempting to open file: %s\n",absolutePath.c_str());
 
-    auto parse_line = parser_mngr->create_parser("%_,%s");
+    char* file = mmap_file(absolutePath.c_str(),file_size);
+
+    auto parse_line = parser_mngr->create_parser(format);
+
+    const char* ll = find_last_line(file, file_size); // find the last line to read its numerical id
+    char * end;
+    long lines = strtod(ll,&end);
 
     size_t line_start = 0;
     size_t line_idx = 0;
 
     dataSet<T>* dataSet = new struct dataSet<T>(); 
-    const char* ll = find_last_line(file, file_size); // find the last line to read its numerical id
-    char * end;
-    long lines = strtod(ll,&end);
     dataSet->data = (T*)malloc(sizeof(T) * lines); // allocate space for all lines
+    printf("allocated parser result buffer: %p for %u bytes\n",dataSet->data,sizeof(T)*lines);
     printf("attempting data parsing @ %p for %ld lines ...\n",file,lines);   
 
-    for (size_t i = 0; i < file_size-1; ++i) 
+    for (size_t i = 0; i < lines; ++i) 
     {
-        if (file[i] == '\n')  // umarbeiten zu data cleaning switch
-        {
-            file[i] = '\0'; //substring terminieren
-            void* out =  (void*)&dataSet[i]; // Speicher für die Ausgabe reservieren
-            
-            parse_line(&file[line_start], &out);
+        printf("writing parsing results to: %p\n",&dataSet->data[i]);
 
-            line_start = i + 1;
-            ++line_idx;
-        }
+        int read = parse_line(&file[line_start], &dataSet->data[i]);
+
+        std::string formatDel = format;
+        formatDel+="\n";
+        printf(formatDel.c_str(),dataSet->data[i]);
+
+        line_start += read;
+        ++line_idx;
     }
     
      printf("data parsing successfull...\n");
