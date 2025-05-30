@@ -54,6 +54,14 @@ void* Parser_mngr::load_func(const std::string& func_name, const std::string& sy
 std::string Parser_mngr::generate_code(const std::string& func_name, const std::string& format) {
     std::stringstream code;
     code << "#include <cstring>\n"
+         << "#include \"constants.h\"\n"
+         << "char* find_and_clean(char* p, char target)\n{\n"
+         << "   while (*p && *p != target)\n\t{\n"
+         << "       *p = lut[(unsigned char)*p];\n"
+         << "       ++p;\n"
+         << "   }\n"
+         << "   return (*p == target) ? p : nullptr;\n"
+         << "}\n\n"
          << "extern \"C\" size_t " << func_name << "(char* line, void** out) {\n"
          << "    char* p = line;\n"
          << "    char* end = nullptr;\n";
@@ -77,13 +85,13 @@ std::string Parser_mngr::generate_code(const std::string& func_name, const std::
                 case 's':
                     code << "    if (*p == '\"')\n\t{\n"
                          << "        ++p;\n"
-                         << "        end = strchr(p, '\"');\n"
+                         << "        end = find_and_clean(p, '\"');\n"
                          << "        if (end) *end = '\\0';\n"
                          << "        ((char**)out[" << arg_index << "])[0] = p;\n"
                          << "        p = end + 1;\n"
                          << "        if (*p == ',') ++p;\n"
                          << "    }\n\telse\n\t{\n"
-                         << "        end = strchr(p, ',');\n"
+                         << "        end = find_and_clean(p, ',');\n"
                          << "        if (!end) end = p + strlen(p);\n"
                          << "        ((char**)out[" << arg_index << "])[0] = p;\n"
                          << "        if (*end != '\\0') *end = '\\0';\n"

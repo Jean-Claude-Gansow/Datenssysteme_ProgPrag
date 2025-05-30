@@ -67,9 +67,10 @@ void* readFile(const char* filename,const char* format)
     size_t line_start = 0;
     size_t line_idx = 0;
 
-    dataSet<T>* dataSet = new dataSet<T>(); 
+    dataSet<T>* dataSet = new struct dataSet<T>(); 
     const char* ll = find_last_line(file, file_size); // find the last line to read its numerical id
-    long lines = strtod(ll);
+    char * end;
+    long lines = strtod(ll,&end);
     dataSet->data = (T*)malloc(sizeof(T) * lines); // allocate space for all lines
     printf("attempting data parsing @ %p for %ld lines ...\n",file,lines);   
 
@@ -77,10 +78,10 @@ void* readFile(const char* filename,const char* format)
     {
         if (file[i] == '\n')  // umarbeiten zu data cleaning switch
         {
-            file[i] = '\0'; // Zeile terminieren// Beispiel: Zugriff auf Werte
-            void* out = dataSet[]; // Speicher für die Ausgabe reservieren
+            file[i] = '\0'; //substring terminieren
+            void* out =  (void*)&dataSet[i]; // Speicher für die Ausgabe reservieren
             
-            parse_line(&file[line_start], out);
+            parse_line(&file[line_start], &out);
 
             line_start = i + 1;
             ++line_idx;

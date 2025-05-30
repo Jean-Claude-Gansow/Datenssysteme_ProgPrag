@@ -37,11 +37,11 @@ int main(int argc, char** argv)
     int start = clock();
 
     //run cvs file input, track time in ms
-    dataSet<char*>* dataSet1 = (dataSet<char*>*)readFile(files[0].c_str(),"%_,%s");
-    dataSet<struct Storage_Device>* dataSet2 = (dataSet<struct Storage_Device>*)readFile(files[1].c_str(),"%_,%s,%d");
+    dataSet<char*>* dataSet1 = (dataSet<char*>*)readFile<char*>(files[0].c_str(),"%_,%s");
+    dataSet<struct Storage_Device>* dataSet2 = (dataSet<struct Storage_Device>*)readFile<Storage_Device>(files[1].c_str(),"%_,%s,%d");
 
-    dataSet<match>* dataSetSol1 = (dataSet<match>*)readFile(files[2].c_str(),"%d,%d");
-    dataSet<match>* dataSetSol2 = (dataSet<match>*)readFile(files[3].c_str(),"%d,%d");
+    dataSet<match>* dataSetSol1 = (dataSet<match>*)readFile<match>(files[2].c_str(),"%d,%d");
+    dataSet<match>* dataSetSol2 = (dataSet<match>*)readFile<match>(files[3].c_str(),"%d,%d");
 
     printf("time elapsed for reading Files: %ld ms\n", clock()-start);
 
