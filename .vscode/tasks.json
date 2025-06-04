@@ -8,6 +8,7 @@
 			"args": [
 				"-fdiagnostics-color=always",
 				"-g",
+				"-O0",
 				"main.cpp","Evaluation_mngr.cpp", "Matching_mngr.cpp", "Parser_mngr.cpp", "Blocking_mngr.cpp",
 				"-o",
 				"${fileDirname}/dupDetec.out"

@@ -83,7 +83,13 @@ extern "C" char* find_and_clean_csv(char* p) {
         if (*p == '"') {
             ++p;//start infield reading
             // Replace all characters until the next quote or end of string
-            while (*p && *p != '"') {*p = lut[*p]; ++p;}// replace characters
+            printf("found quote at %p\n", p);
+            while (*p && *p != '"') 
+                {
+                    printf("changing -- %c : %c\n", *p, lut[*p]); 
+                    *p = lut[*p]; 
+                    ++p;
+                }// replace characters
             if (*p == '"') ++p;
         }
         if (*p == ',' || *p == '\n' || *p == '\r' || *p == '\0') {

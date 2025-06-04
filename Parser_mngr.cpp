@@ -76,18 +76,18 @@ std::string Parser_mngr::generate_code(const std::string& func_name, const std::
             if (i >= format.size()) break;
             switch (format[i]) {
                 case '_':
-                    format_code << "    parse_field_ignore(p, line);\n";
+                    format_code << "    parse_field_ignore(p, line, outbuffer);\n";
                     break;
                 case 's':
-                    format_code << "    parse_field_s(p, fields, " << arg_index << ", line);\n";
+                    format_code << "    parse_field_s(p, fields, " << arg_index << ", line, outbuffer);\n";
                     ++arg_index;
                     break;
                 case 'f':
-                    format_code << "    parse_field_f(p, fields, " << arg_index << ", line);\n";
+                    format_code << "    parse_field_f(p, fields, " << arg_index << ", line, outbuffer);\n";
                     ++arg_index;
                     break;
                 case 'V':
-                    format_code << "    parse_field_V(p, fields, " << arg_index << ", line);\n";
+                    format_code << "    parse_field_V(p, fields, " << arg_index << ", line, outbuffer);\n";
                     ++arg_index;
                     break;
                 case 'd':
@@ -131,7 +131,7 @@ void Parser_mngr::compile_code(const std::string& cpp_code, const std::string& n
     out << cpp_code;
     out.close();
 
-    std::string cmd = "g++ -std=c++17 -O3 -fPIC -shared -nostdlib -nodefaultlibs " + filename + " -o " + sofile + " -lc";
+    std::string cmd = "g++ -std=c++17 -g -O0 -fPIC -shared -nostdlib -nodefaultlibs " + filename + " -o " + sofile + " -lc";
     if (system(cmd.c_str()) != 0) {
         throw std::runtime_error("Compilerfehler bei: " + filename);
     }
