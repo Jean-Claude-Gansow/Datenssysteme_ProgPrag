@@ -73,11 +73,9 @@ inline void parse_field_V(char*& p, uintptr_t* fields, int idx, char* line) {
 }
 
 // --- Hauptfunktion ---
-extern "C" size_t parser_0(char* line, void* out) {
+extern "C" size_t {{FUNC_NAME}}(char* line, void* out) {
     char* p = line;
     uintptr_t* fields = (uintptr_t*)out;
-    parse_field_ignore(p, line);
-    parse_field_V(p, fields, 0, line);
-
+{{FORMAT_CODE}}
     return p - line;
 }

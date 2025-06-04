@@ -1,4 +1,8 @@
 #include "Parser_mngr.h"
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <filesystem>
 
 using ParserFunc = size_t(*)(const char* line, void* out);
 
@@ -53,26 +57,18 @@ void* Parser_mngr::load_func(const std::string& func_name, const std::string& sy
     return sym;
 }
 
-std::string Parser_mngr::generate_code(const std::string& func_name, const std::string& format) {
-    std::stringstream code;
-    code << "#include <cstring>\n"
-         << "#include <cstdint>\n"
-         << "#include <cstdlib>\n"
-         << "#include <stdio.h>\n"
-         << "#include \"constants.h\"\n"
-         << "extern \"C\" char* find_and_clean(char* p, char target)\n{\n"
-         << "   while (*p && *p != target)\n" 
-         << "   {\n" 
-         << "       printf(\"%p -- %c : %c \\n\",p,*p,lut[*p]);\n"
-         << "       *p = lut[(unsigned char)*p]; ++p;\n"
-         << "   }\n"
-         << "   return (*p == target) ? p : nullptr;\n"
-         << "}\n\n"
-         << "extern \"C\" size_t " << func_name << "(char* line, void* out) {\n"
-         << "    char* p = line;\n"
-         << "    char* end = nullptr;\n"
-         << "    uintptr_t* fields = (uintptr_t*)out;\n";
+// Hilfsfunktion zum Lesen einer Datei als String
+std::string read_file_as_string(const std::string& filename) {
+    std::ifstream in(filename);
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    return buffer.str();
+}
 
+std::string Parser_mngr::generate_code(const std::string& func_name, const std::string& format) {
+    std::string template_code = read_file_as_string("parser_template.cpp");
+
+    std::stringstream format_code;
     int arg_index = 0;
     for (size_t i = 0; i < format.size(); ++i) {
         if (format[i] == '%') {
@@ -80,54 +76,49 @@ std::string Parser_mngr::generate_code(const std::string& func_name, const std::
             if (i >= format.size()) break;
             switch (format[i]) {
                 case '_':
-                    code << "    // Skip field\n";
-                    code << "    if (*p == '\"') {\n"
-                         << "        p = strchr(p + 1, '\"');\n"
-                         << "        if (p) p = strchr(p + 1, ',');\n"
-                         << "    } else {\n"
-                         << "        p = strchr(p, ',');\n"
-                         << "    }\n"
-                         << "    if (p) ++p;\n";
+                    format_code << "    parse_field_ignore(p, line);\n";
                     break;
                 case 's':
-                    code << "    if (*p == '\"') {\n"
-                         << "        ++p;\n"
-                         << "        end = find_and_clean(p, '\"');\n"
-                         << "        if (end) *end = '\\0';\n"
-                         << "        fields[" << arg_index << "] = (uintptr_t)p;\n"
-                         << "        p = end + 1;\n"
-                         << "        if (*p == ',') ++p;\n"
-                         << "    } else {\n"
-                         << "        end = find_and_clean(p, ',');\n"
-                         << "        if (!end) end = p + strlen(p);\n"
-                         << "        fields[" << arg_index << "] = (uintptr_t)p;\n"
-                         << "        if (*end != '\\0') *end = '\\0';\n"
-                         << "        p = (*end == ',') ? end + 1 : end;\n"
-                         << "    }\n";
-                    ++arg_index;
-                    break;
-                case 'd':
-                    code << "    fields[" << arg_index << "] = (uintptr_t)atoi(p);\n";
-                    code << "    p = strchr(p, ',');\n"
-                         << "    if (p) ++p;\n";
+                    format_code << "    parse_field_s(p, fields, " << arg_index << ", line);\n";
                     ++arg_index;
                     break;
                 case 'f':
-                    code << "    float tmp_f = strtof(p, &end);\n";
-                    code << "    uintptr_t tmp_bits;\n"
-                         << "    memcpy(&tmp_bits, &tmp_f, sizeof(float));\n"
-                         << "    fields[" << arg_index << "] = tmp_bits;\n";
-                    code << "    p = (*end == ',') ? end + 1 : end;\n";
+                    format_code << "    parse_field_f(p, fields, " << arg_index << ", line);\n";
+                    ++arg_index;
+                    break;
+                case 'V':
+                    format_code << "    parse_field_V(p, fields, " << arg_index << ", line);\n";
+                    ++arg_index;
+                    break;
+                case 'd':
+                    format_code << "    // Integer-Feld\n";
+                    format_code << "    if (*p == ',' || *p == '\\n' || *p == '\\0' || *p == '\\r') {\n"
+                                << "        fields[" << arg_index << "] = 0;\n"
+                                << "        if (*p == ',') ++p;\n"
+                                << "    } else {\n"
+                                << "        fields[" << arg_index << "] = (uintptr_t)atoi(p);\n"
+                                << "        char* end = p;\n"
+                                << "        while (*end && *end != ',' && *end != '\\n' && *end != '\\r') ++end;\n"
+                                << "        p = end;\n"
+                                << "        if (*p == ',') ++p;\n"
+                                << "    }\n";
                     ++arg_index;
                     break;
                 default:
+                    format_code << "    // Unbekannter Feldtyp: " << format[i] << "\n";
                     break;
             }
         }
     }
 
-    code << "    return p - line;\n}\n";
-    return code.str();
+    // Platzhalter ersetzen wie gehabt
+    size_t pos;
+    while ((pos = template_code.find("{{FUNC_NAME}}")) != std::string::npos)
+        template_code.replace(pos, 13, func_name);
+    while ((pos = template_code.find("{{FORMAT_CODE}}")) != std::string::npos)
+        template_code.replace(pos, 15, format_code.str());
+
+    return template_code;
 }
 
 

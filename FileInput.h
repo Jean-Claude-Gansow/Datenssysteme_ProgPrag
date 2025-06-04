@@ -1,5 +1,6 @@
 #include "DataTypes.h"
 #include "Parser_mngr.h"
+#include "Utillity.h"
 
 #include <fstream>
 #include <string>
@@ -102,18 +103,23 @@ void* readFile(const char* filename,const char* format)
         printf("writing parsing results to: %p\n",&dataSet->data[i]);
 
         int read = parse_line(&file[line_start], &dataSet->data[i]);
-
-        std::string formatDel = format;
-        formatDel+="\n";
-        printf(formatDel.c_str(),dataSet->data[i]);
-
         line_start += read;
-        ++line_idx;
+
+        // Trennzeichen überspringen, falls vorhanden
+        if (file[line_start] == ',' || file[line_start] == '\n' || file[line_start] == '\r')
+            ++line_start;
+
+        print_row(dataSet->data[i], format);
     }
     
      printf("data parsing successfull...\n");
 
     return nullptr;
 }
+
+
+
+
+
 
 #endif //DUPLICATEDETECTION_FILEINPUT_H

@@ -21,7 +21,10 @@ std::string files[] =
 
 int main(int argc, char** argv)
 {   
-    
+    char test[3] = "\"\n";
+    printf("%hu\n",(unsigned short)((*test << 8) | *(test+1)));
+
+
     printf("Reading Dataset: Laptops from path: %s\n",files[0].c_str());
     printf("Reading Dataset: Storage from path: %s\n",files[1].c_str());
     printf("Reading Dataset: Laptops-Solution from path: %s\n",files[2].c_str());
@@ -37,10 +40,10 @@ int main(int argc, char** argv)
 
     int start = clock();
 
-    //run cvs file input, track time in ms
-    dataSet<char*>* dataSet1 = (dataSet<char*>*)readFile<char*>(files[0].c_str(),"%_,%s");
-    dataSet<storage>* dataSet2 = (dataSet<storage>*)readFile<storage>(files[1].c_str(),"%_,%s,%f,%s,%s,%s");
-
+    //run cvs file input, track time in ms>
+    dataSet<char*>* dataSet1 = (dataSet<char*>*)readFile<char*>(files[0].c_str(),"%_,%V");
+    dataSet<storage>* dataSet2 = (dataSet<storage>*)readFile<storage>(files[1].c_str(),"%_,%s,%f,%s,%s,%V");
+    
     dataSet<match>* dataSetSol1 = (dataSet<match>*)readFile<match>(files[2].c_str(),"%d,%d");
     dataSet<match>* dataSetSol2 = (dataSet<match>*)readFile<match>(files[3].c_str(),"%d,%d");
 
