@@ -10,9 +10,11 @@ inline void parse_field_s(char*& p, uintptr_t* fields, int idx, char* line, FILE
 {
     fprintf(outbuffer, "[parser] s Feldstart %d: '%c' @ %ld\n", idx, *p, p - line);
     if (*p == ',' || *p == '\n' || *p == '\0' || *p == '\r') {
+        // Leeres Feld
         fields[idx] = (uintptr_t)"";
         if (*p == ',') ++p;
     } else {
+        // Nicht-leeres Feld
         char* end = find_and_clean_csv(p);
         fields[idx] = (uintptr_t)p;
         char trenn = *end;
@@ -20,28 +22,30 @@ inline void parse_field_s(char*& p, uintptr_t* fields, int idx, char* line, FILE
         p = end;
         if (trenn == ',') ++p;
     }
-    fprintf(outbuffer, "[parser] Feldende %d: '%c' @ %ld\n", idx, *p, p - line);
+    fprintf(outbuffer, "[parser] Feldende %d: '%c' @ %ld\n\n", idx, *p, p - line);
 }
 
-// --- Abschnitt für %f (Float-Feld) ---
+// --- Abschnitt für %f (Double-Feld) ---
 inline void parse_field_f(char*& p, uintptr_t* fields, int idx, char* line, FILE* outbuffer) {
     fprintf(outbuffer, "[parser] f Feldstart %d: '%c' @ %ld\n", idx, *p, p - line);
     if (*p == ',' || *p == '\n' || *p == '\0' || *p == '\r') {
-        float tmp_f = 0.0f;
-        uintptr_t tmp_bits;
-        memcpy(&tmp_bits, &tmp_f, sizeof(float));
+        double tmp_f = 0.0;
+        uintptr_t tmp_bits = 0;
+        memcpy(&tmp_bits, &tmp_f, sizeof(double));
         fields[idx] = tmp_bits;
         if (*p == ',') ++p;
     } else {
         char* end;
-        float tmp_f = strtof(p, &end);
-        uintptr_t tmp_bits;
-        memcpy(&tmp_bits, &tmp_f, sizeof(float));
+        double tmp_f = strtod(p, &end);
+        uintptr_t tmp_bits = 0;
+        memcpy(&tmp_bits, &tmp_f, sizeof(double));
         fields[idx] = tmp_bits;
         p = end;
         if (*p == ',') ++p;
     }
-    fprintf(outbuffer, "[parser] Feldende %d: '%c' @ %ld\n", idx, *p, p - line);
+    double value = 0.0;
+    memcpy(&value, &fields[idx], sizeof(double));
+    fprintf(outbuffer, "[parser] Feldende %d: '%c' @ %ld, Wert: %lf\n", idx, *p, p - line, value);
 }
 
 // --- Abschnitt für %_ (ignore) ---

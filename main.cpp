@@ -8,6 +8,7 @@
 #include "Evaluation_mngr.h"
 #include "Blocking_mngr.h"
 #include "Matching_mngr.h"
+#include "Parser_mngr.h"
 #include "FileInput.h"
 #include "DataTypes.h"
 
@@ -38,14 +39,28 @@ int main(int argc, char** argv)
     unsigned int maxThreads = std::thread::hardware_concurrency();
     maxThreads = maxThreads > 1 ? maxThreads : 1; //in case thread count failed set it to one thread
 
+    Parser_mngr parser_mngr;
+
     int start = clock();
 
-    //run cvs file input, track time in ms>
-    dataSet<char*>* dataSet1 = (dataSet<char*>*)readFile<char*>(files[0].c_str(),"%_,%V");
-    dataSet<storage>* dataSet2 = (dataSet<storage>*)readFile<storage>(files[1].c_str(),"%_,%s,%f,%s,%s,%V");
-    
-    dataSet<match>* dataSetSol1 = (dataSet<match>*)readFile<match>(files[2].c_str(),"%d,%d");
-    dataSet<match>* dataSetSol2 = (dataSet<match>*)readFile<match>(files[3].c_str(),"%d,%d");
+    // 1. Datei-Objekte erzeugen
+    File file1(files[0]);
+    File file2(files[1]);
+    File file3(files[2]);
+    File file4(files[3]);
+
+    // 2. Multi-Threaded Parsing für alle Datasets
+    dataSet<char*>* dataSet1 = parser_mngr.parse_multithreaded<char*>(
+        file1.data(), file1.size(), file1.line_count(), "%_,%V", maxThreads);
+
+    dataSet<storage>* dataSet2 = parser_mngr.parse_multithreaded<storage>(
+        file2.data(), file2.size(), file2.line_count(), "%_,%s,%f,%s,%s,%V", maxThreads);
+
+    dataSet<match>* dataSetSol1 = parser_mngr.parse_multithreaded<match>(
+        file3.data(), file3.size(), file3.line_count(), "%d,%d", maxThreads);
+
+    dataSet<match>* dataSetSol2 = parser_mngr.parse_multithreaded<match>(
+        file4.data(), file4.size(), file4.line_count(), "%d,%d", maxThreads);
 
     printf("time elapsed for reading Files: %ld ms\n", clock()-start);
 
@@ -53,13 +68,13 @@ int main(int argc, char** argv)
 
     printf("generating Blocks...\n");
 
-    block_t* blocksDS1 = m_blocking_mngr->generateBlocks(dataSet1->size,maxThreads); //fails because dataSet::len isnt filled ATMs.
-    block_t* blocksDS2 = m_blocking_mngr->generateBlocks(dataSet2->size,maxThreads);
+    block_t* blocksDS1 = m_blocking_mngr->generateBlocks(dataSet1->size, maxThreads);
+    block_t* blocksDS2 = m_blocking_mngr->generateBlocks(dataSet2->size, maxThreads);
 
     printf("generating matching...\n");
 
-    match* matchesDS1 = m_matching_mngr->generateMatching(blocksDS1,figureOut,maxThreads);
-    match* matchesDS2 = m_matching_mngr->generateMatching(blocksDS2,figureOut,maxThreads);
+    match* matchesDS1 = m_matching_mngr->generateMatching(blocksDS1, figureOut, maxThreads);
+    match* matchesDS2 = m_matching_mngr->generateMatching(blocksDS2, figureOut, maxThreads);
 
     printf("time elapsed for finding matches: %ld", clock()-start);
 
