@@ -14,9 +14,9 @@
 std::string files[] = 
 {
     "../data/Z1.csv",
-    "../data/TZ2.csv",
-    "../data/TZY1.csv",
-    "../data/TZY2.csv"
+    "../data/Z2.csv",
+    "../data/ZY1.csv",
+    "../data/ZY2.csv"
 };
 
 int main(int argc, char** argv)
@@ -50,21 +50,26 @@ int main(int argc, char** argv)
 
     int start = clock();
     // 2. Multi-Threaded Parsing für alle Datasets
-    dataSet<char*>* dataSet1 = parser_mngr.parse_multithreaded<char*>(file1.data(), file1.size(), file1.line_count(), "%_,%V", maxThreads);
+    dataSet<single_t>* dataSet1 = parser_mngr.parse_multithreaded<single_t>(file1.data(), file1.size(), file1.line_count(), "%_,%V", maxThreads);
 
-    printf("Parsed %zu lines from file1\n", dataSet1->size);
+    printf("Parsed %zu lines from file1:\n", dataSet1->size);
+    print_Dataset(*dataSet1, "%_,%V");
 
     dataSet<storage>* dataSet2 = parser_mngr.parse_multithreaded<storage>(file2.data(), file2.size(), file2.line_count(), "%_,%s,%f,%s,%s,%V", maxThreads);
 
     printf("Parsed %zu lines from file2\n", dataSet2->size);
+    print_Dataset(*dataSet2, "%_,%s,%f,%s,%s,%V");
 
     dataSet<match>* dataSetSol1 = parser_mngr.parse_multithreaded<match>(file3.data(), file3.size(), file3.line_count(), "%d,%d", maxThreads);
-
+    
     printf("Parsed %zu lines from file3\n", dataSetSol1->size);
+    print_Dataset(*dataSetSol1, "%d,%d");
+
 
     dataSet<match>* dataSetSol2 = parser_mngr.parse_multithreaded<match>(file4.data(), file4.size(), file4.line_count(), "%d,%d", maxThreads);
     
     printf("Parsed %zu lines from file4\n", dataSetSol2->size);
+    print_Dataset(*dataSetSol2, "%d,%d");
 
     // Zu Beginn auswählbares Dataset zum Ausgeben
     // Einfach hier den gewünschten Pointer setzen:

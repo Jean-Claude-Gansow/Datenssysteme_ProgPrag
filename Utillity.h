@@ -75,16 +75,22 @@ inline void print_tuple(const uintptr_t* data, const char* format) {
     printf("\n");
 }
 
+
 template<unsigned int N>
 void print_row(const tuple_t<N, uintptr_t>& row, const char* format) {
     print_tuple(row.data, format);
 }
-inline void print_row(char* row, const char*) {
-    printf("%s\n", row ? row : "");
+
+template<typename t>
+inline void print_Dataset(const dataSet<t>& dataset, const char* format) 
+{
+    printf("Dataset size: %zu\n", dataset.size);
+    for (size_t i = 0; i < dataset.size; ++i)
+    {
+        print_row<(unsigned int)(sizeof(t)/sizeof(uintptr_t))>(dataset.data[i], format);
+    }
 }
-inline void print_row(const match& row, const char*) {
-    printf("%d, %d\n", row.data[0], row.data[1]);
-}
+
 
 inline char* find_and_clean_csv(char* p) {
     char* start = p;

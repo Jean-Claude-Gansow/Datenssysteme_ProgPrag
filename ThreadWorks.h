@@ -107,7 +107,7 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
                 ++line_start;
 
             ++thread_counts[0];
-            printf("Thread 0: Verarbeitet Zeichen %zu, Output-Index %zu\n", line_start, thread_counts[0]);
+            //printf("Thread 0: Verarbeitet Zeichen %zu, Output-Index %zu\n", line_start, thread_counts[0]);
         }
         return;
     }
@@ -122,7 +122,7 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
     for (size_t t = 0; t < num_threads; ++t)
     {
         raw_offsets[t] = start + t * per_thread_bytes;
-        printf("Thread %zu: [%zu ~ %zu]\n", t, raw_offsets[t],raw_offsets[t] + per_thread_bytes);
+        //printf("Thread %zu: [%zu ~ %zu]\n", t, raw_offsets[t],raw_offsets[t] + per_thread_bytes);
     }
 
     // 2. An Zeilenanfänge anpassen
@@ -145,12 +145,12 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
 
     // 3. Buffer reservieren (doppelte Größe)
     size_t expected_lines = total_lines / num_threads;
-    size_t buffered_lines = expected_lines + (size_t)(expected_lines / 10);
+    size_t buffered_lines = expected_lines + (size_t)((expected_lines / 10)+2); // bei kleinen Dateien fällt der Puffer konstant zu klein aus, daher +2
     for (size_t t = 0; t < num_threads; ++t) {
-        printf("Thread %zu: Reserviere Puffer für %zu Zeilen\n", t, buffered_lines);
+        //printf("Thread %zu: Reserviere Puffer für %zu Zeilen\n", t, buffered_lines);
         thread_buffers[t] = new T[buffered_lines]; //allocated buffer per thread
         thread_counts[t] = 0;
-        printf("Thread %zu: Start angepasst auf [%zu - %zu]\n", t, real_offsets[t], real_offsets[t+1]);
+        printf("Thread %zu: -> [%zu - %zu]\n", t, real_offsets[t], real_offsets[t+1]);
     }
 
     // 4. Threads starten
@@ -181,7 +181,7 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
                     ++line_start;
 
                 ++out_idx; //after each line processed go to next writing position
-                printf("Thread %ld: Verarbeitet Zeichen %zu, Output-Index %zu\n", t,line_start, thread_counts[t]++);
+                //printf("Thread %ld: Verarbeitet Zeichen %zu, Output-Index %zu\n", t,line_start, thread_counts[t]++);
             }
 
             *count_ptr = out_idx;

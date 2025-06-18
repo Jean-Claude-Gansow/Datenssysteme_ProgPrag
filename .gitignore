@@ -1,0 +1,18 @@
+# Ignoriere alle .so-Dateien
+parser_0.so
+parser_1.so
+parser_2.so
+parser_3.so
+
+# Ignoriere parser_*.cpp-Dateien
+parser_0.cpp
+parser_1.cpp
+parser_2.cpp
+parser_3.cpp
+
+# Ignoriere parser_*_out.txt-Dateien
+parser_0_out.txt
+parser_1_out.txt
+parser_2_out.txt
+parser_3_out.txt
+

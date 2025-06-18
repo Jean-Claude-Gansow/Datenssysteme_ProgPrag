@@ -55,13 +55,19 @@ public:
         for (size_t t = 0; t < num_threads; ++t)
             result->size += thread_count[t];
 
+        printf("combining Buffer without tokenizing further: Combined Buffer size %zu\n",result->size);
+
         result->data = (T *)malloc(sizeof(T) * result->size);
-        size_t offset = 0;
-        for (size_t t = 0; t < num_threads; ++t)
+        for (size_t t = 0,offset = 0; t < num_threads; ++t)
         {
             memcpy(result->data + offset, thread_buffer[t], sizeof(T) * thread_count[t]);
             offset += thread_count[t];
             delete[] thread_buffer[t];
+        }
+
+        for(int i = 0; i < result->size; i++)
+        {
+            
         }
 
         return result;

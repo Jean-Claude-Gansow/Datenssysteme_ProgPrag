@@ -34,8 +34,9 @@ struct tuple_t {
     }
 };
 
+typedef tuple_t<1,uintptr_t> single_t;
 typedef tuple_t<5,uintptr_t> storage;
-typedef tuple_t<2,int> pair,match;
+typedef tuple_t<2,uintptr_t> pair,match;
 typedef pair** block_t;
 
 typedef struct matching_t
