@@ -137,12 +137,18 @@ inline void parse_field_V(char*& p, uintptr_t* fields, int idx, char* line, FILE
 
 
 // --- Hauptfunktion ---
-extern "C" size_t {{FUNC_NAME}}(char* line, void* out) {
-    FILE* outbuffer = fopen("{{FUNC_NAME}}_out.txt", "a");
+extern "C" size_t parser_1(char* line, void* out) {
+    FILE* outbuffer = fopen("parser_1_out.txt", "a");
     if (!outbuffer) outbuffer = stdout;
     char* p = line;
     uintptr_t* fields = (uintptr_t*)out;
-{{FORMAT_CODE}}
+    parse_field_ignore(p, line, outbuffer);
+    parse_field_s(p, fields, 0, line, outbuffer);
+    parse_field_f(p, fields, 1, line, outbuffer);
+    parse_field_s(p, fields, 2, line, outbuffer);
+    parse_field_s(p, fields, 3, line, outbuffer);
+    parse_field_V(p, fields, 4, line, outbuffer);
+
     if (outbuffer && outbuffer != stdout) fclose(outbuffer);
     return p - line;
 }

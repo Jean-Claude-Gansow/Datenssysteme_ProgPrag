@@ -15,42 +15,89 @@
 
 #include "ThreadWorks.h"
 
-using ParserFunc = size_t(*)(const char* line, void* out);
+using ParserFunc = size_t (*)(const char *line, void *out);
 
-class Parser_mngr 
+class Parser_mngr
 {
 public:
-    ParserFunc create_parser(const std::string& format);
+    ParserFunc create_parser(const std::string &format);
     const std::vector<ParserFunc> &get_all_parsers() const { return parsers; }
 
-    // NEU: Multi-Threaded Parsing
-    template<typename T>
-    dataSet<T>* parse_multithreaded(const char* buffer, size_t buffer_size, size_t total_lines,const std::string& format, size_t num_threads = std::thread::hardware_concurrency())
+    template <typename T>
+    dataSet<T> *parse_multithreaded(const char *buffer, size_t buffer_size, size_t total_lines, const std::string &format, size_t num_threads = std::thread::hardware_concurrency(), size_t start_line = 1) // start_line ist 1 damit wir die Spaltenbeschriftungen überspringen können
     {
         ParserFunc parser = create_parser(format);
 
-        // Wrapper für std::function
-        std::function<int(const char*, void*)> parse_line = [parser](const char* line, void* out) {return parser(line, out);};
+        std::function<int(const char *, void *)> parse_line = [parser](const char *line, void *out) { return parser(line, out); };
 
-        // Speicher für alle Zeilen anlegen
-        dataSet<T>* result = new dataSet<T>();
-        result->data = (T*)malloc(sizeof(T) * total_lines);
-        result->size = total_lines;
-        
-        threaded_line_split<T>(buffer, buffer_size, 0, buffer_size, num_threads, total_lines, parse_line, static_cast<T*>(result->data), format.c_str());
+        printf("creating thread buffer for %zu threads...\n", num_threads);
+
+        // 1. Pro Thread eigenen Buffer + Counter anlegen
+        T** thread_buffer = new T*[num_threads];
+        size_t* thread_count = new size_t[num_threads];
+
+        // 2. Startzeilen-Offset berechnen
+        size_t start_offset = 0;
+        size_t skipped = 0;
+        while (start_offset < buffer_size && skipped < start_line)
+        {
+            if (buffer[start_offset] == '\n')
+                ++skipped;
+            ++start_offset;
+        }
+
+        // 3. Threads starten und befüllen lassen
+        threaded_line_split<T>(buffer, format.c_str(), buffer_size, num_threads, start_offset, total_lines - start_line, parse_line, thread_buffer, thread_count);
+
+        // 4. Ergebnis zusammenführen
+        dataSet<T> *result = new dataSet<T>();
+        result->size = 0;
+        for (size_t t = 0; t < num_threads; ++t)
+            result->size += thread_count[t];
+
+        result->data = (T *)malloc(sizeof(T) * result->size);
+        size_t offset = 0;
+        for (size_t t = 0; t < num_threads; ++t)
+        {
+            memcpy(result->data + offset, thread_buffer[t], sizeof(T) * thread_count[t]);
+            offset += thread_count[t];
+            delete[] thread_buffer[t];
+        }
+
+        return result;
+    }
+
+    // Variante MIT Tokenization
+    template <typename T, typename TokenType>
+    dataSet<TokenType> *parse_multithreaded(const char *buffer, size_t buffer_size, size_t total_lines, const std::string &format, std::function<TokenType(const T &)> tokenizer, size_t num_threads = std::thread::hardware_concurrency())
+    {
+        // 1. Erst wie gehabt parsen
+        dataSet<T> *parsed = parse_multithreaded<T>(buffer, buffer_size, total_lines, format, num_threads);
+
+        // 2. Dann tokenisieren
+        dataSet<TokenType> *result = new dataSet<TokenType>();
+        result->size = parsed->size;
+        result->data = (TokenType *)malloc(sizeof(TokenType) * result->size);
+
+        for (size_t i = 0; i < parsed->size; ++i)
+            result->data[i] = tokenizer(parsed->data[i]);
+
+        // Optional: parsed->data freigeben, falls nicht mehr benötigt
+        free(parsed->data);
+        delete parsed;
+
         return result;
     }
 
 private:
-    std::vector<void*> hSoFile;
+    std::vector<void *> hSoFile;
     std::vector<ParserFunc> parsers;
     int parser_index = 0;
 
 private:
-    void* load_func(const std::string& func_name, const std::string& symbol);
-    std::string generate_code(const std::string& func_name, const std::string& format);
-    void compile_code(const std::string& cpp_code, const std::string& name);
+    void *load_func(const std::string &func_name, const std::string &symbol);
+    std::string generate_code(const std::string &func_name, const std::string &format);
+    void compile_code(const std::string &cpp_code, const std::string &name);
 };
-
 
 #endif

@@ -87,31 +87,61 @@ inline void print_row(const match& row, const char*) {
 }
 
 inline char* find_and_clean_csv(char* p) {
-    int indent = 0;
-    int increment = 1;
-    while (*p) {
-        if (*p == '"') 
+    char* start = p;
+    //fprintf(stderr, "[csv] Feldstart (\") @ %p\n", (void*)p);
+
+    if (*p == '"') {
+        // Quoted field
+        char* dst = p;
+        ++p;  // Skip leading quote
+        //fprintf(stderr, "[csv] Start quoted @ %p\n", (void*)p);
+
+        while (*p) 
         {
-            indent += increment;
-            increment = -increment;
-            ++p;//start infield reading
-            // Replace all characters until the next quote or end of string
-            printf("found quote at %p : indent %d increment %d\n", p,indent,increment);
-            while (*p && !(*p == '"' && (indent == 1 && increment < 0))) //run for as long as we find no quoteation mark thats supposed to finalize closing
+            if (*p == '"') 
             {
-                printf("changing -- %c : %c\n", (unsigned char)*p, lut[*p]); 
-                *p = lut[*p]; 
+                if (*(p + 1) == '"') 
+                {
+                    // Escaped quote ("")
+                    *dst++ = '"';
+                    //fprintf(stderr, "[csv] Escaped quote \"\" gefunden @ %p\n", (void*)p);
+                    p += 2;
+                } else {
+                    // End of quoted field
+                    ++p;
+                    //fprintf(stderr, "[csv] Ende quoted @ %p\n", (void*)p);
+                    break;
+                }
+            } else {
+                *dst++ = lut[(unsigned char)*p];
+                //fprintf(stderr, "[csv] Quoted-Zeichen: '%c' → '%c' @ %p\n", *p, *(dst - 1), (void*)p);
                 ++p;
-            }// replace characters
-            if (*p == '"') ++p;
+            }
         }
-        if (*p == ',' || *p == '\n' || *p == '\r' || *p == '\0') {
-            return p;
+
+        // Skip trailing whitespace or unexpected characters until comma or newline
+        while (*p && *p != ',' && *p != '\n' && *p != '\r') {
+            //fprintf(stderr, "[csv] Überspringe char nach quoted Feld: '%c' @ %p\n", *p, (void*)p);
+            ++p;
         }
-        ++p;
+
+        //fprintf(stderr, "[csv] Feldende (\") %p -- %zu\n", (void*)p, (size_t)(p-start));
+        return p;
+    } else {
+        // Unquoted field
+        char* dst = p;
+        while (*p && *p != ',' && *p != '\n' && *p != '\r') {
+            *dst++ = lut[(unsigned char)*p];
+            //fprintf(stderr, "[csv] Plain-Zeichen: '%c' → '%c' @ %p\n", *p, *(dst - 1), (void*)p);
+            ++p;
+        }
+
+        //fprintf(stderr, "[csv] Feldende (plain) bei: '%c' @ %p\n", *p, (void*)p);
+        return p;
     }
-    return p;
 }
+
+
 
 // Zählt belegende Platzhalter im Formatstring (ohne %_)
 inline int count_fields(const char* format) {

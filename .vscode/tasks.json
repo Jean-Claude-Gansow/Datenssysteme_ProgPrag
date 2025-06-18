@@ -11,7 +11,7 @@
 				"-O0",
 				"main.cpp","Evaluation_mngr.cpp", "Matching_mngr.cpp", "Parser_mngr.cpp", "Blocking_mngr.cpp","Thread_mngr.cpp",
 				"-o",
-				"${fileDirname}/dupDetec.out"
+				"dupDetec.out"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"

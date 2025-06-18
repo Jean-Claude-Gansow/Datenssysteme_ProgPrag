@@ -91,17 +91,7 @@ std::string Parser_mngr::generate_code(const std::string& func_name, const std::
                     ++arg_index;
                     break;
                 case 'd':
-                    format_code << "    // Integer-Feld\n";
-                    format_code << "    if (*p == ',' || *p == '\\n' || *p == '\\0' || *p == '\\r') {\n"
-                                << "        fields[" << arg_index << "] = 0;\n"
-                                << "        if (*p == ',') ++p;\n"
-                                << "    } else {\n"
-                                << "        fields[" << arg_index << "] = (uintptr_t)atoi(p);\n"
-                                << "        char* end = p;\n"
-                                << "        while (*end && *end != ',' && *end != '\\n' && *end != '\\r') ++end;\n"
-                                << "        p = end;\n"
-                                << "        if (*p == ',') ++p;\n"
-                                << "    }\n";
+                    format_code << "    parse_field_d(p, fields, " << arg_index << ", line, outbuffer);\n";
                     ++arg_index;
                     break;
                 default:
@@ -136,3 +126,4 @@ void Parser_mngr::compile_code(const std::string& cpp_code, const std::string& n
         throw std::runtime_error("Compilerfehler bei: " + filename);
     }
 }
+
