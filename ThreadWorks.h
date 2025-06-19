@@ -181,7 +181,7 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
                     ++line_start;
 
                 ++out_idx; //after each line processed go to next writing position
-                //printf("Thread %ld: Verarbeitet Zeichen %zu, Output-Index %zu\n", t,line_start, thread_counts[t]++);
+                //printf("Thread %ld: %zu -> buf [%zu]\n", t,line_start, thread_counts[t]++);
             }
 
             *count_ptr = out_idx;

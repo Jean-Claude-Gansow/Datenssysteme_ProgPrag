@@ -121,7 +121,7 @@ void Parser_mngr::compile_code(const std::string& cpp_code, const std::string& n
     out << cpp_code;
     out.close();
 
-    std::string cmd = "g++ -std=c++17 -g -O0 -fPIC -shared -nostdlib -nodefaultlibs " + filename + " -o " + sofile + " -lc";
+    std::string cmd = "g++ -std=c++17 -g -O3 -fPIC -shared -nostdlib -nodefaultlibs " + filename + " -o " + sofile + " -lc";
     if (system(cmd.c_str()) != 0) {
         throw std::runtime_error("Compilerfehler bei: " + filename);
     }
