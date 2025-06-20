@@ -78,7 +78,7 @@ public:
         {
             trim(line);
             if (!line.empty())
-                data.insert(line);
+                data[line[0]-'a'].insert(line);
         }
         return true;
     }
@@ -92,7 +92,7 @@ public:
     // Prüfen, ob ein Token enthalten ist
     bool contains(const std::string &token) const
     {
-        return data.find(token) != tokens.end();
+        return data[token[0]-'a'].contains(token);
     }
 
     // Tokenisiere einen String anhand von Whitespaces

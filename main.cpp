@@ -7,6 +7,7 @@
 #include "Evaluation_mngr.h"
 #include "Blocking_mngr.h"
 #include "Matching_mngr.h"
+#include "Tokenization_mngr.h"
 #include "Parser_mngr.h"
 #include "FileInput.h"
 #include "DataTypes.h"
@@ -30,6 +31,7 @@ int main(int argc, char** argv)
     printf("Reading Dataset: Laptops-Solution from path: %s\n",files[2].c_str());
     printf("Reading Dataset: Storage-Solution from path: %s\n",files[3].c_str());
 
+    Tokenization_mngr* m_tokenization_mngr = new Tokenization_mngr();
     Blocking_mngr* m_blocking_mngr = new Blocking_mngr();
     Matching_mngr* m_matching_mngr = new Matching_mngr();
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
@@ -47,6 +49,10 @@ int main(int argc, char** argv)
     File file2(files[1]);
     File file3(files[2],true);
     File file4(files[3],true);
+
+    m_tokenization_mngr->loadTokenList("../data/marken.tokenz");
+    m_tokenization_mngr->loadTokenList("../data/.tokenz"); //vervollständigen wenn Listen vorhanden sind
+
 
     int start = clock();
     // 2. Multi-Threaded Parsing für alle Datasets
