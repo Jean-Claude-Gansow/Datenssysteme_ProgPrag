@@ -37,7 +37,7 @@ public:
     }
 
     size_t line_count() const { return this->lines; }
-    const char* data() const { return buffer; }
+    char* data() const { return buffer; }
     size_t size() const { return filesize; }
     const std::string& path() const { return filename; }
 

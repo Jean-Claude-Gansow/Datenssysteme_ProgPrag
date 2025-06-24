@@ -84,7 +84,6 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
 
     printf("Dateigröße: %zu, Start: %zu, Gesamtzeilen: %zu\n", content_size, start, total_lines);
 
-    
     if (num_threads <= 1) 
     {
 
@@ -194,4 +193,36 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
 
     delete[] real_offsets;
     delete[] threads;
+}
+
+template <typename T>
+inline void threaded_tokenization(T *buffer, size_t buffer_size, unsigned char field_layout[sizeof(T)/sizeof(uintptr_t)], size_t num_threads,T **thread_buffers)
+{
+    printf("Anzahl Threads: %zu, Start: %zu, Gesamtzeilen: %zu\n", num_threads, start, total_lines);
+
+    size_t *raw_offsets = new size_t[num_threads + 1];
+    size_t *real_offsets = new size_t[num_threads + 1];
+
+    // 1. Bereiche grob aufteilen
+    size_t per_thread_lines = buffer_size / num_threads;
+    for (size_t t = 0; t < num_threads; ++t)
+    {
+        raw_offsets[t] = t * per_thread_lines;
+        // printf("Thread %zu: [%zu ~ %zu]\n", t, raw_offsets[t],raw_offsets[t] + per_thread_bytes);
+    }
+
+    real_offsets[0] = start;
+    for (size_t t = 0; t < num_threads; ++t)
+    {
+        size_t pos = raw_offsets[t];
+        if (pos == 0)
+            pos = 1;
+        while (pos < content_size && file_content[pos - 1] != '\n')
+        {
+            ++pos;
+        }
+        real_offsets[t] = pos;
+    }
+    real_offsets[num_threads] = content_size; // dont allow reads over the end of the file
+    delete[] raw_offsets;                     // no longer needed
 }

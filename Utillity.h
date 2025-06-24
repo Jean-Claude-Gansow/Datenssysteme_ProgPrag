@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <cstdint>
 #include <typeinfo>
 #include "constants.h"
@@ -8,27 +9,6 @@
 
 #ifndef UTILLITY_DUPLICATE_DETECTION_H
 #define UTILLITY_DUPLICATE_DETECTION_H
-
-/*extern "C" char* find_and_clean(char* p, char target)
-{
-    while (*p && *p != target)
-    { 
-         printf("%p -- %c : %c \n",p,*p,lut[*p]);
-         *p = lut[(unsigned char)*p]; ++p;
-    }
-    return (*p == target) ? p : nullptr;
-}
-
-extern "C" char* find_and_clean_short(char* p, unsigned short target)
-{
-    while (*p && (((unsigned char)p[0] << 8) | (unsigned char)p[1]) != target) 
-    {
-        //printf("%p -- %c : %c  \n", p, *p, lut[(unsigned char)*p]);
-        *p = lut[(unsigned char)*p];
-        ++p;
-    }
-    return (((unsigned char)p[0] << 8) | (unsigned char)p[1]) == target ? p : nullptr;
-}*/
 
 inline void print_tuple(const uintptr_t* data, const char* format) {
     int field = 0;

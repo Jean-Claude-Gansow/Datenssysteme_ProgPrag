@@ -2,6 +2,7 @@
 #define DUPLICATE_DETECTION_DATATYPES
 
 #include <cstdint>
+#include <cstring>
 
 template <typename t>
 struct dataSet
@@ -55,7 +56,25 @@ typedef struct matching_t
     }
 } matching;
 
-typedef struct Laptop
+
+typedef enum category_enum
+{
+    undef = -1,
+    assembler_brand,
+    assembler_modell,
+    cpu_brand,
+    cpu_fam,
+    cpu_series,
+    ram_capacity,
+    rom_capacity,
+    gpu_brand,
+    gpu_fam,
+    gpu_series,
+    display_resolution,
+    display_size
+} category, token_class;
+
+struct laptop
 { 
     /*char marke; //bzw Hersteller
     char modell; //index auf ModellListe modellliste pro marke bzw Hersteller
@@ -69,11 +88,12 @@ typedef struct Laptop
     {
         struct 
         {
-            char model; // Index auf ModellListe, Modellliste pro Marke bzw. Hersteller
-            short cpu; // Aufteilen in Familie und Serie, wenn möglich 4 Bit für Familie und 12 Bit für Serie da es deutlich mehr Serien als Familien gibt, überarbeiten falls das den Rahmen sprengt
-            char ram; // Arbeitsspeicher in GB, z.B. 4, 8, 16, 32, 64
-            char rom; // Speicherkapazität in GB, z.B. 128, 256, 512, 1024, 2048
-            short gpu; // Aufteilen in Marke, Modell und Speicherkapazität, wenn möglich
+            char brand; //Index auf herstellerliste bzw Laptop marke
+            char model; // Index auf ModellListe bzw Laptop Serienname eg ThinkPad
+            char rom;   // Speicherkapazität in GB, z.B. 128, 256, 512, 1024, 2048 or TB, z.b. 1TB 2TB 3TB...
+            char ram;   // Arbeitsspeicher in GB, z.B. 4, 8, 16, 32, 64
+            char cpu_brand,cpu_fam,cpu_series; //store all information about the processor individually
+            char gpu_brand, gpu_fam, gpu_series; // brand partially the same as cpu brand, familly and series should differ a bit
             char display_resolution; // Auflösung des Displays, z.B. 1920x1080, 2560x1440, 3840x2160
             char display_size; // Größe des Displays in Zoll, z.B. 13, 15, 17, 19
         };
@@ -81,14 +101,47 @@ typedef struct Laptop
     
     char * description; // Pointer auf eine Zeichenkette, die die Beschreibung des Laptops enthält
     
-    const bool operator == (const Laptop& other) const 
+    bool operator == (const laptop& other) const 
     {
-        return (*this & other) == *this; // Beispiel: 0 für gleiche IDs, 1 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
+        return (*this| other) == 1.0;
     }
 
-    const double operator | (const Laptop& other) const 
+    double operator | (const laptop& other) const  //implementiere eine Vergleichsfunktion basieren auf einer anderen Metrik als dem Direkten tokenvergleich.
     {
-        return strncmp(description,other.description); // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
+
+        return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
+    }
+}; 
+
+struct Storage_drive
+{
+    Storage_drive()
+    {
+        memset(this,0,sizeof(Storage_drive));
+    }
+
+    union
+    {
+        struct
+        {
+            char brand;                          // Index auf herstellerliste bzw Laptop marke
+            char model;                          // Index auf ModellListe bzw Laptop Serienname eg ThinkPad
+            char rom;                            // Speicherkapazität in GB, z.B. 128, 256, 512, 1024, 2048 or TB, z.b. 1TB 2TB 3TB...
+            char fill;
+        };
+    }; // Union für verschiedene Attribute des
+
+    bool operator==(const laptop &other) const
+    {
+        char *a = (char *)this, *b = (char *)&other;
+        int cutSim;
+        return (*this | other) == 1.0;
+    }
+
+    double operator|(const laptop &other) const // implementiere eine Vergleichsfunktion basieren auf einer anderen Metrik als dem Direkten tokenvergleich.
+    {
+        
+        return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
     }
 };
 

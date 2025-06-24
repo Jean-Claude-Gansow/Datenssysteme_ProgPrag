@@ -25,13 +25,13 @@ int main(int argc, char** argv)
     char test[3] = "\"\n";
     printf("%hu\n",(unsigned short)((*test << 8) | *(test+1)));
 
-
     printf("Reading Dataset: Laptops from path: %s\n",files[0].c_str());
     printf("Reading Dataset: Storage from path: %s\n",files[1].c_str());
     printf("Reading Dataset: Laptops-Solution from path: %s\n",files[2].c_str());
     printf("Reading Dataset: Storage-Solution from path: %s\n",files[3].c_str());
 
-    Tokenization_mngr* m_tokenization_mngr = new Tokenization_mngr();
+    Tokenization_mngr<sizeof(laptop)>* m_Laptop_tokenization_mngr = new Tokenization_mngr<sizeof(laptop)>();
+    Tokenization_mngr<sizeof(Storage_drive)> *m_Storage_tokenization_mngr = new Tokenization_mngr<sizeof(Storage_drive)>();
     Blocking_mngr* m_blocking_mngr = new Blocking_mngr();
     Matching_mngr* m_matching_mngr = new Matching_mngr();
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
@@ -50,9 +50,22 @@ int main(int argc, char** argv)
     File file3(files[2],true);
     File file4(files[3],true);
 
-    m_tokenization_mngr->loadTokenList("../data/marken.tokenz");
-    m_tokenization_mngr->loadTokenList("../data/.tokenz"); //vervollständigen wenn Listen vorhanden sind
+    //TODO: Listenbäume aufbauen. Format: Token;Token;Token;...Token\n -> index = line
+    //TODO: Listen zuusammenführen -> Klassenindices können erst dann korrekt gebaut werden.
+    m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_marken.tokenz",assembler_brand); //laptop brand
+    m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_modelle.tokenz", assembler_modell); //laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_marken.tokenz", cpu_brand); //cpu brand
+    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle.tokenz",cpu_fam); //cpu familly (i3,i5,i7...)
+    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_series.tokenz", cpu_series); //cpu series (10400kf,14100K...)
+    m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_marken.tokenz", gpu_brand);//gpu brand 
+    m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_modelle.tokenz", gpu_fam);// gpu familly (gt,gtx,rtx,radeon ...)
+    m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_series.tokenz", gpu_series);// gpu series (no clue yet)
+    m_Laptop_tokenization_mngr->loadTokenList("../data/ram_size.tokenz",ram_capacity);//
+    m_Laptop_tokenization_mngr->loadTokenList("../data/rom_size.tokenz",rom_capacity);
 
+    m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_marken",assembler_brand);
+    m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_modelle", assembler_brand);
+    m_Storage_tokenization_mngr->loadTokenList("../data/rom_size",rom_capacity);
 
     int start = clock();
     // 2. Multi-Threaded Parsing für alle Datasets

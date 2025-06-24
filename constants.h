@@ -1,38 +1,51 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
+// Breakout-Labels für goto-Anweisungen
 
-static const unsigned char lut[256] = {
+static const unsigned char token_lut[128] = {
     // 0-47 (20er zeilen)
-    31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,
-    31,31,31,31,31,31,31,31,31,31,31,31,' ',31,31,31,31,31,31,31,
-    31,31,31,31,31,31,',',31,
+    0, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+    32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, ' ', 32, 32, 32, 32, 32, 32, 32,
+    32, 32, 32, 32, 32, 32, ',', 32,
     // 48-57 '0'-'9'
-    '0','1','2','3','4','5','6','7','8','9', //auf Werte nach kleinbuchstaben mappen
+    87, 88, 89, 90, 91, 92, 93, 94, 95, 96, // auf Werte nach kleinbuchstaben mappen
     // 58-64
-    31,31,31,31,31,31,31,
+    32, 32, 32, 32, 32, 32, 32,
     // 65-90 'A'-'Z' to 'a'-'z'
-    'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', '0', '1', '2', '3',
     // 91-96
-    31,31,31,31,31,31,
+    '4', '5', '6', '7', '8', '9', //for transforming the mapped numbers back to numbers in case of a string comparisson
     // 97-122 'a'-'z'
-    'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z',
-    // 123-255
-    31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,
-    31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,
-    31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,
-    31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,
-    31,31,31,31,31
-};
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    // 123-127
+    32, 32, 32, 32, 32};
 
-
-
-
-#endif // CONSTANTS_H
+static const unsigned char lut[256] =
+    { // 0-47 (20er zeilen)
+        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, ' ',
+        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, ',', 32,
+        // 48-57 '0'-'9'
+        87, 88, 89, 90, 91, 92, 93, 94, 95, 96, //'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', // auf Werte nach kleinbuchstaben mappen
+        //58-64
+        32, 32, 32, 32, 32, 32, 32,
+        // 65-90 'A'-'Z' to 'a'-'z'
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+        // 91-96
+        32, 32, 32, 32, 32, 32,
+        // 97-122 'a'-'z'
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+        // 123-255
+        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+        32};
+#endif
 
 // copilot generated comment:
 // This lookup table can be used to convert characters '0'-'9' and 'A'-'Z' to lowercase 'a'-'z'
-// and to ignore other characters by mapping them to 0. This is useful for data cleaning or normalization tasks.
+// and to ignore other characters by mapping them to whitespace. This is useful for data cleaning or normalization tasks.
 // The table is indexed by the ASCII value of the character, and it provides a quick way to convert
 // characters without needing to use conditionals or loops. For example, to convert a character `c`,
 // you can simply use `lut[(unsigned char)c]`, which will return the corresponding lowercase character
