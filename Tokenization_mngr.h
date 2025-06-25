@@ -14,6 +14,7 @@
 #include "FileInput.h"
 #include "DataTypes.h"
 
+using TokenizerFunc = size_t (*)(const char *stringField, char*out);
 
 
 //Aufbau: Tokenization Manager bekommt für jeden Buchstaben einen Token tree, dieser enthält absteigend die Tokens, die mit diesem Buchstaben anfangen. Alsbald ein buchstabe abweicht, wird in der Liste nachgesehen ob es ein Wort gibt, welches den aktuellen buchstaben an der aktuellen Position enthält
@@ -156,16 +157,122 @@ public:
     // Prüfen, ob ein Token enthalten ist
     char contains(const std::string &token,token_class tk) const
     {
-        for(int i = 0; i < token.size(); i++)
-        {
-            char index = classes[tk].contains(token);
-            if(index != 0){return index;}
-        } 
+        
+        return classes[tk].contains(token);
     }
 
-    // Gibt alle Tokens aus text numerisch nach buffer zurück. 
+    template<typename t>
+    void tokenize_multithreaded(dataSet<t>* dataSet,const char format)
+    {
+        TOkenizerFunc tokenizer = create_tokenizer(format);
+
+        std::function<int(const char *, char *)> tokenize_field = [tokenizer](const char *line, void *out) { return parser(line, out); };
+
+        printf("creating thread buffer for %zu threads...\n", num_threads);
+
+        // 1. Pro Thread eigenen Buffer + Counter anlegen
+        T** thread_buffer = new T*[num_threads];
+        size_t* thread_count = new size_t[num_threads];
+
+        // 2. Startzeilen-Offset berechnen
+        size_t start_offset = 0;
+        size_t skipped = 0;
+        while (start_offset < buffer_size && skipped < start_line)
+        {
+            if (buffer[start_offset] == '\n')
+                ++skipped;
+            ++start_offset;
+        }
+    }
+
     template<typename t> 
-    void filterTokens(char *text,t* buffer) const
+    void create_tokenizer(cont char* format)
+    {
+        std::string name = "parser_" + std::to_string(parsers.size());
+    
+        std::string code = generate_code(name,format);
+
+        // 2. Kompilieren
+        compile_code(code, name);
+
+        // 3. Laden
+        void* fn_ptr = load_func(name, name); // "parse_line" ist der Name der generierten Funktion
+        
+        // 4. Cast und speichern
+        ParserFunc fn = reinterpret_cast<ParserFunc>(fn_ptr);
+        parsers.push_back(fn);
+
+        return fn;
+    }
+
+private:
+    void *load_func(const std::string &func_name, const std::string &symbol)
+    {
+        printf("loading function...\n");
+        std::string sofile = func_name + ".so";
+        std::string abs_path = std::filesystem::absolute(sofile).string();
+        
+        printf("attempting to open file: %s\n",abs_path.c_str());
+
+        void* handle = dlopen(abs_path.c_str(), RTLD_NOW);
+
+        if (!handle) {
+            throw std::runtime_error("Fehler beim Laden von " + sofile + ": " + dlerror());
+        }
+
+        dlerror(); // Clear any existing error
+        void* sym = dlsym(handle, symbol.c_str());
+        const char* dlsym_error = dlerror();
+        if (dlsym_error) {
+            dlclose(handle);
+            throw std::runtime_error("Fehler beim Laden des Symbols " + symbol + ": " + dlsym_error);
+        }
+
+        hSoFile.push_back(handle); // Optional: handle verwalten für späteres dlclose()
+
+        printf("done loading...\n");
+
+        return sym;
+    }
+
+    std::string generate_code(const std::string &func_name, const std::string &format)
+    {
+        std::string template_code = read_file_as_string("parser_template.cpp");
+
+    std::stringstream format_code;
+    int arg_index = 0;
+    for (size_t i = 0; i < format.size(); ++i) {
+        if (format[i] == '%') {
+            ++i;
+            if (i >= format.size()) break;
+            switch (format[i]) {
+                case '_':
+                    break;
+                case 's':
+                    format_code << "    filter_tokens(p, outbuffer);\n";
+                    ++arg_index;
+                    break;
+                case 'f':
+                    ++arg_index;
+                    break;
+                case 'V':
+                    format_code << "    filter_tokens(p, outbuffer);\n";
+                    ++arg_index;
+                    break;
+                case 'd':
+                    ++arg_index;
+                    break;
+                default:
+                    format_code << "    // Unbekannter Feldtyp: " << format[i] << "\n";
+                    break;
+            }
+        }
+    }
+    
+    void compile_code(const std::string &cpp_code, const std::string &name);
+
+    template<typename t> 
+    void filter_tokens(char *text,t** buffer) const
     {
         void *jumpTable[128] = {
             &&eof, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,        // 0–7
@@ -223,7 +330,7 @@ public:
             char index = contains(std::string(p),i); //check whether the word at the current pointer is a token of class i
             if(index > 0)
             {
-                (char*)buffer[i] = index;
+                *((char**)buffer)[i] = index;
                 goto *jumpTable[*(p++)]; //if a token was identified, we continue looking for further tokens in coming words.
             }
         }
@@ -233,9 +340,11 @@ public:
         return;
     }
 
-private:
     int numClasses = N; 
     token_node classes[N]; 
+    std::vector<void *> hSoFile;
+    std::vector<TokenizerFunc> tokenizer;
+    int parser_index = 0;
 
 
     // Hilfsfunktion zum Trimmen von Strings

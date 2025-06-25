@@ -73,28 +73,6 @@ public:
         return result;
     }
 
-    // Variante MIT Tokenization
-    template <typename T, typename TokenType>
-    dataSet<TokenType> *parse_multithreaded(const char *buffer, size_t buffer_size, size_t total_lines, const std::string &format, std::function<TokenType(const T &)> tokenizer, size_t num_threads = std::thread::hardware_concurrency())
-    {
-        // 1. Erst wie gehabt parsen
-        dataSet<T> *parsed = parse_multithreaded<T>(buffer, buffer_size, total_lines, format, num_threads);
-
-        // 2. Dann tokenisieren
-        dataSet<TokenType> *result = new dataSet<TokenType>();
-        result->size = parsed->size;
-        result->data = (TokenType *)malloc(sizeof(TokenType) * result->size);
-
-        for (size_t i = 0; i < parsed->size; ++i)
-            result->data[i] = tokenizer(parsed->data[i]);
-
-        // Optional: parsed->data freigeben, falls nicht mehr benötigt
-        free(parsed->data);
-        delete parsed;
-
-        return result;
-    }
-
 private:
     std::vector<void *> hSoFile;
     std::vector<ParserFunc> parsers;

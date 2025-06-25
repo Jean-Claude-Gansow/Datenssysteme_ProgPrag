@@ -83,7 +83,8 @@ struct laptop
     char rom; //bzw Speicherkapazität --> all gb notes > 64gb
     short gpu; //aufteilen in Marke, modell und Speicherkapazität, wenn möglich 
     char display-resolution;
-    char display-size;*/
+    char display-
+    size;*/
     union 
     {
         struct 
