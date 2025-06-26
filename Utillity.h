@@ -71,6 +71,12 @@ inline void print_Dataset(const dataSet<t>& dataset, const char* format)
     }
 }
 
+#ifndef READ_FILE_STR_FUNC
+#define READ_FILE_STR_FUNC
+
+
+
+#endif
 
 inline char* find_and_clean_csv(char* p) {
     char* start = p;
@@ -89,7 +95,7 @@ inline char* find_and_clean_csv(char* p) {
                 if (*(p + 1) == '"') 
                 {
                     // Escaped quote ("")
-                    *dst++ = '"';
+                    *dst++ = Escape;
                     //fprintf(stderr, "[csv] Escaped quote \"\" gefunden @ %p\n", (void*)p);
                     p += 2;
                 } else {
@@ -127,7 +133,14 @@ inline char* find_and_clean_csv(char* p) {
     }
 }
 
-
+inline void replace_all(std::string &target, const std::string &placeholder, const std::string &value)
+{
+    size_t pos;
+    while ((pos = target.find(placeholder)) != std::string::npos)
+    {
+        target.replace(pos, placeholder.length(), value);
+    }
+}
 
 // Zählt belegende Platzhalter im Formatstring (ohne %_)
 inline int count_fields(const char* format) {

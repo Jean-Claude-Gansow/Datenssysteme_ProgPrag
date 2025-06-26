@@ -58,7 +58,8 @@ void* Parser_mngr::load_func(const std::string& func_name, const std::string& sy
 }
 
 // Hilfsfunktion zum Lesen einer Datei als String
-std::string read_file_as_string(const std::string& filename) {
+std::string read_file_as_string(const std::string &filename)
+{
     std::ifstream in(filename);
     std::stringstream buffer;
     buffer << in.rdbuf();

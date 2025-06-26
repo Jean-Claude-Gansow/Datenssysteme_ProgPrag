@@ -160,9 +160,10 @@ extern "C" size_t parser_0(char* line, void* out) {
     if (!outbuffer) outbuffer = stdout;
     char* p = line;
     uintptr_t* fields = (uintptr_t*)out;
-    parse_field_ignore(p, line, outbuffer);
+        parse_field_ignore(p, line, outbuffer);
     parse_field_V(p, fields, 0, line, outbuffer);
 
+    printf("--:%s\n",line);
     if (outbuffer && outbuffer != stdout) fclose(outbuffer);
     return p - line;
 }

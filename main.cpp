@@ -14,8 +14,8 @@
 
 std::string files[] = 
 {
-    "../data/Z1.csv",
-    "../data/Z2.csv",
+    "../data/TZ1.csv",
+    "../data/TZ2.csv",
     "../data/ZY1.csv",
     "../data/ZY2.csv"
 };
@@ -30,15 +30,15 @@ int main(int argc, char** argv)
     printf("Reading Dataset: Laptops-Solution from path: %s\n",files[2].c_str());
     printf("Reading Dataset: Storage-Solution from path: %s\n",files[3].c_str());
 
-    Tokenization_mngr<sizeof(laptop)>* m_Laptop_tokenization_mngr = new Tokenization_mngr<sizeof(laptop)>();
-    Tokenization_mngr<sizeof(Storage_drive)> *m_Storage_tokenization_mngr = new Tokenization_mngr<sizeof(Storage_drive)>();
+    Tokenization_mngr<12, single_t, laptop> *m_Laptop_tokenization_mngr = new Tokenization_mngr<12, single_t, laptop>({"12","single_t","laptop"});
+    Tokenization_mngr<4, quintupel, storage_drive> *m_Storage_tokenization_mngr = new Tokenization_mngr<4, quintupel, storage_drive>({"4","quintupel","storage_drive"});
     Blocking_mngr* m_blocking_mngr = new Blocking_mngr();
     Matching_mngr* m_matching_mngr = new Matching_mngr();
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
     
     unsigned int figureOut = 0; //unknown by now, filling that in later
     unsigned int maxThreads = std::thread::hardware_concurrency();
-    maxThreads = maxThreads > 1 ? maxThreads : 1; //in case thread count failed set it to one thread
+    maxThreads = maxThreads > 1 ? 1 : 1; //in case thread count failed set it to one thread
 
     Parser_mngr parser_mngr;
 
@@ -52,29 +52,29 @@ int main(int argc, char** argv)
 
     //TODO: Listenbäume aufbauen. Format: Token;Token;Token;...Token\n -> index = line
     //TODO: Listen zuusammenführen -> Klassenindices können erst dann korrekt gebaut werden.
-    //m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_marken.tokenz",assembler_brand); //laptop brand
-    //m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_modelle.tokenz", assembler_modell); //laptop modell
-    //m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_marken.tokenz", cpu_brand); //cpu brand
-    //m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle.tokenz",cpu_fam); //cpu familly (i3,i5,i7...)
+    m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_marken.tokenz",assembler_brand); //laptop brand
+    m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_modelle.tokenz", assembler_modell); //laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_marken.tokenz", cpu_brand); //cpu brand
+    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle.tokenz",cpu_fam); //cpu familly (i3,i5,i7...)
     //m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_series.tokenz", cpu_series); //cpu series (10400kf,14100K...)
-    //m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_marken.tokenz", gpu_brand);//gpu brand 
+    m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_marken.tokenz", gpu_brand);//gpu brand 
     //m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_modelle.tokenz", gpu_fam);// gpu familly (gt,gtx,rtx,radeon ...)
     //m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_series.tokenz", gpu_series);// gpu series (no clue yet)
-    //m_Laptop_tokenization_mngr->loadTokenList("../data/ram_size.tokenz",ram_capacity);//
-    //m_Laptop_tokenization_mngr->loadTokenList("../data/rom_size.tokenz",rom_capacity);
+    m_Laptop_tokenization_mngr->loadTokenList("../data/ram_size.tokenz",ram_capacity);//
+    m_Laptop_tokenization_mngr->loadTokenList("../data/rom_size.tokenz",rom_capacity);
 
-    //m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_marken",assembler_brand);
-    //m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_modelle", assembler_brand);
-    //m_Storage_tokenization_mngr->loadTokenList("../data/rom_size",rom_capacity);
+    m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_marken.tokenz",assembler_brand);
+    //m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_modelle.tokenz", assembler_brand);
+    m_Storage_tokenization_mngr->loadTokenList("../data/rom_size.tokenz",rom_capacity);
 
     int start = clock();
     // 2. Multi-Threaded Parsing für alle Datasets
     dataSet<single_t>* dataSet1 = parser_mngr.parse_multithreaded<single_t>(file1.data(), file1.size(), file1.line_count(), "%_,%V", maxThreads);
-    m_Laptop_tokenization_mngr.tokenize()
+    m_Laptop_tokenization_mngr->tokenize_multithreaded(dataSet1, "%_,%V",maxThreads);
     printf("Parsed %zu lines from file1:\n", dataSet1->size);
     print_Dataset(*dataSet1, "%_,%V");
 
-    dataSet<storage>* dataSet2 = parser_mngr.parse_multithreaded<storage>(file2.data(), file2.size(), file2.line_count(), "%_,%s,%f,%s,%s,%V", maxThreads);
+    dataSet<quintupel>* dataSet2 = parser_mngr.parse_multithreaded<quintupel>(file2.data(), file2.size(), file2.line_count(), "%_,%s,%f,%s,%s,%V", maxThreads);
 
     printf("Parsed %zu lines from file2\n", dataSet2->size);
     print_Dataset(*dataSet2, "%_,%s,%f,%s,%s,%V");

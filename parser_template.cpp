@@ -160,7 +160,8 @@ extern "C" size_t {{FUNC_NAME}}(char* line, void* out) {
     if (!outbuffer) outbuffer = stdout;
     char* p = line;
     uintptr_t* fields = (uintptr_t*)out;
-{{FORMAT_CODE}}
+    {{FORMAT_CODE}}
+    printf("--:%s\n",line);
     if (outbuffer && outbuffer != stdout) fclose(outbuffer);
     return p - line;
 }

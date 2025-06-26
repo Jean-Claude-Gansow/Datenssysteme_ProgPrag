@@ -3,44 +3,35 @@
 
 // Breakout-Labels für goto-Anweisungen
 
-static const unsigned char token_lut[128] = {
-    // 0-47 (20er zeilen)
-    0, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
-    32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, ' ', 32, 32, 32, 32, 32, 32, 32,
-    32, 32, 32, 32, 32, 32, ',', 32,
-    // 48-57 '0'-'9'
-    87, 88, 89, 90, 91, 92, 93, 94, 95, 96, // auf Werte nach kleinbuchstaben mappen
-    // 58-64
-    32, 32, 32, 32, 32, 32, 32,
-    // 65-90 'A'-'Z' to 'a'-'z'
-    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', '0', '1', '2', '3',
-    // 91-96
-    '4', '5', '6', '7', '8', '9', //for transforming the mapped numbers back to numbers in case of a string comparisson
-    // 97-122 'a'-'z'
-    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-    // 123-127
-    32, 32, 32, 32, 32};
+//map all other than 
 
+//123 == '"'
+//124 == ','
+//whitespace == ' '
+
+static unsigned char Escape = 123;
+static unsigned char dotToComma = 125;
+static unsigned char whitespace = 124;
 static const unsigned char lut[256] =
     { // 0-47 (20er zeilen)
-        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, ' ',
-        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, ',', 32,
+        whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace,
+        whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, dotToComma, whitespace,
         // 48-57 '0'-'9'
         87, 88, 89, 90, 91, 92, 93, 94, 95, 96, //'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', // auf Werte nach kleinbuchstaben mappen
-        //58-64
-        32, 32, 32, 32, 32, 32, 32,
+                                                // 58-64
+        whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace,
         // 65-90 'A'-'Z' to 'a'-'z'
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
         // 91-96
-        32, 32, 32, 32, 32, 32,
+        whitespace, whitespace, whitespace, whitespace, whitespace, whitespace,
         // 97-122 'a'-'z'
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
         // 123-255
-        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
-        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
-        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
-        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
-        32};
+        whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace,
+        whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace,
+        whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace,
+        whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace,
+        whitespace};
 #endif
 
 // copilot generated comment:

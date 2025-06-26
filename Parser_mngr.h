@@ -14,6 +14,7 @@
 #include <filesystem>
 
 #include "ThreadWorks.h"
+#include "Utillity.h"
 
 using ParserFunc = size_t (*)(const char *line, void *out);
 
@@ -65,11 +66,6 @@ public:
             delete[] thread_buffer[t];
         }
 
-        for(int i = 0; i < result->size; i++)
-        {
-            
-        }
-
         return result;
     }
 
@@ -84,4 +80,4 @@ private:
     void compile_code(const std::string &cpp_code, const std::string &name);
 };
 
-#endif
+#endif 
