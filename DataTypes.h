@@ -41,6 +41,22 @@ typedef tuple_t<2,uintptr_t> pair,match;
 typedef pair** block_t;
 typedef unsigned short token;
 
+typedef struct partitions_t
+{
+    pair* data; // Pointer auf die Daten der Partition
+    unsigned int size; // Größe der Partition
+
+    pair& operator[](unsigned int index) 
+    {
+        return data[index];
+    }
+
+    const pair& operator[](unsigned int index) const 
+    {
+        return data[index];
+    }
+} partition;
+
 typedef struct matching_t
 {
     match* matches;
@@ -58,21 +74,21 @@ typedef struct matching_t
 } matching;
 
 
-typedef enum category_enum
+typedef enum category_enum //define for laptop as well as storage_drive
 {
     undef = -1,
-    assembler_brand,
-    assembler_modell,
-    ram_capacity,
-    rom_capacity,
-    cpu_brand,
-    cpu_fam,
-    cpu_series,
-    gpu_brand,
-    gpu_fam,
-    gpu_series,
-    display_resolution,
-    display_size
+    assembler_brand, //both
+    assembler_modell, //both
+    ram_capacity, storage_capacity = ram_capacity, //laptop , storage
+    rom_capacity, //storage
+    cpu_brand, //laptop
+    cpu_fam, //laptop
+    cpu_series, //laptop
+    gpu_brand, //laptop
+    gpu_fam, //laptop
+    gpu_series, //laptop
+    display_resolution, //laptop
+    display_size //laptop
 } category, token_class;
 
 struct laptop
@@ -86,23 +102,31 @@ struct laptop
     char display-resolution;
     char display-
     size;*/
-    union obj_token 
+
+    laptop()
     {
-        struct token_classes
-        {
-            token brand; //Index auf herstellerliste bzw Laptop marke
-            token model; // Index auf ModellListe bzw Laptop Serienname eg ThinkPad
-            token rom;   // Speicherkapazität in GB, z.B. 128, 256, 512, 1024, 2048 or TB, z.b. 1TB 2TB 3TB...
-            token ram;   // Arbeitsspeicher in GB, z.B. 4, 8, 16, 32, 64
-            token cpu_brand,cpu_fam,cpu_series; //store all information about the processor individually
-            token gpu_brand, gpu_fam, gpu_series; // brand partially the same as cpu brand, familly and series should differ a bit
-            token display_resolution; // Auflösung des Displays, z.B. 1920x1080, 2560x1440, 3840x2160
-            token display_size; // Größe des Displays in Zoll, z.B. 13, 15, 17, 19
-        };
-    }; // Union für verschiedene Attribute des
-    
+        memset(this, 0, sizeof(laptop));
+    }
+
+    token brand; //Index auf herstellerliste bzw Laptop marke
+    token model; // Index auf ModellListe bzw Laptop Serienname eg ThinkPad
+    token rom;   // Speicherkapazität in GB, z.B. 128, 256, 512, 1024, 2048 or TB, z.b. 1TB 2TB 3TB...
+    token ram;   // Arbeitsspeicher in GB, z.B. 4, 8, 16, 32, 64
+    token cpu_brand,cpu_fam,cpu_series; //store all information about the processor individually
+    token gpu_brand, gpu_fam, gpu_series; // brand partially the same as cpu brand, familly and series should differ a bit
+    token display_resolution; // Auflösung des Displays, z.B. 1920x1080, 2560x1440, 3840x2160
+    token display_size; // Größe des Displays in Zoll, z.B. 13, 15, 17, 19
+
+
+    size_t id;
     char * description; // Pointer auf eine Zeichenkette, die die Beschreibung des Laptops enthält
     
+    token operator [](const category idx) const
+    {
+        const token *tokens = &brand; // erstes Token-Feld
+        return tokens[idx];
+    }
+
     bool operator == (const laptop& other) const 
     {
         return (*this| other) == 1.0;
@@ -151,18 +175,19 @@ struct storage_drive
         memset(this,0,sizeof(storage_drive));
     }
 
-    union
-    {
-        struct
-        {
-            token brand;                          // Index auf herstellerliste bzw Laptop marke
-            token model;                          // Index auf ModellListe bzw Laptop Serienname eg ThinkPad
-            token rom;                            // Speicherkapazität in GB, z.B. 128, 256, 512, 1024, 2048 or TB, z.b. 1TB 2TB 3TB...
-            token fill;
-        };
-    }; // Union für verschiedene Attribute des
+    token brand;                          // Index auf herstellerliste bzw Laptop marke
+    token model;                          // Index auf ModellListe bzw Laptop Serienname eg ThinkPad
+    token rom;                            // Speicherkapazität in GB, z.B. 128, 256, 512, 1024, 2048 or TB, z.b. 1TB 2TB 3TB...
+    token fill;
 
+    size_t id;
     quintupel* descriptor;
+
+    token operator[](const category idx) const
+    {
+        const token *tokens = &brand; // erstes Token-Feld
+        return tokens[idx];
+    }
 
     bool operator==(const laptop &other) const
     {

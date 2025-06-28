@@ -99,7 +99,7 @@ public:
         eof:
         *p = 0;                                          // mark end of string
         insert(tokenbegin, lineIndex++, (p - tokenbegin)); // insert, until current position
-        return p - file.data();
+        return lineIndex; // return the number of tokens with different meaning
     }
 
     token get_possible_index(char *p) const
@@ -124,7 +124,6 @@ public:
             }
             else if (node->id_index > 0)
             {
-                printf("\n");
                 return node->id_index;
             }
             ++current;
@@ -204,9 +203,10 @@ inline static size_t numTokenizers = 0; //keep track of how many tokenizers ther
 template <size_t N,typename in_buf_t,typename out_buf_t>
 class Tokenization_mngr
 {
-    using TokenizerFunc = size_t (*)(in_buf_t *bufferEntry, token**out, Tokenization_mngr *tkm); 
-
-public :
+    using TokenizerFunc = size_t (*)(in_buf_t *bufferEntry, token**out, Tokenization_mngr *tkm);
+public:
+    size_t m_class_tokens_found[N];
+public:
     Tokenization_mngr(std::vector<std::string> template_types)
     {
         this->m_tokenizer_mngr_id = numTokenizers++;
@@ -218,8 +218,6 @@ public :
 
     Tokenization_mngr(std::vector<std::string> template_types,const category priority[N])
     {
-        
-
         this->m_tokenizer_mngr_id = numTokenizers++;
         for (std::string s : template_types)
         {
@@ -231,7 +229,8 @@ public :
     bool loadTokenList(const std::string &filename, token_class tk)
     {
         printf("importing file: %s\n", filename.c_str());
-        size_t ret = classes[tk].fimport_token(filename.c_str());;
+        size_t ret = classes[tk].fimport_token(filename.c_str());
+        this->m_class_tokens_found[tk] += ret;
         classes[tk].print();
         return true;     
     }
@@ -275,7 +274,6 @@ public :
 
     TokenizerFunc create_tokenizer(const char* format)
     {
-        printf("currrent tokenizers:%ld\n",tokenizers.size());
         std::string name = "tokenizer_" + std::to_string(this->m_tokenizer_mngr_id) + "_" + std::to_string(tokenizers.size());
 
         std::string code = generate_code(name,format);
@@ -289,14 +287,11 @@ public :
         // 4. Cast und speichern
         TokenizerFunc fn = reinterpret_cast<TokenizerFunc>(fn_ptr);
         tokenizers.push_back(fn);
-        printf("added local tokenizer count now:%ld\n", tokenizers.size());
         return fn;
     }
 
-    void filter_tokens(char *text, out_buf_t **buffer) const
+    void filter_tokens(char *text, out_buf_t **buffer)
     {
-        printf("looking for tokens in: %s\n", text);
-
         char *p = text;
 
         while (*p)
@@ -317,7 +312,7 @@ public :
                 token index = contains(p, static_cast<category>(i));
                 if (index > 0)
                 {
-                    printf("found Token in category %d: %d\n", i, (token)index);
+                    m_class_tokens_found[i]++;
                     // Speicher den Index des gefundenen Tokens
                     (*((token**)buffer))[i] = index;
 
@@ -540,7 +535,6 @@ private:
                         break;
                     case 's':
                         format_code << "\ttkm->filter_tokens((char*)(line->data["<<arg_index<<"]), out);\n";
-                        format_code << "\tprintf(\"done Analyzing s field "<< arg_index<<"\\n\");\n";
                         ++arg_index;
                         break;
                     case 'f':
@@ -548,7 +542,6 @@ private:
                         break;
                     case 'V':
                         format_code << "\ttkm->filter_tokens((char*)(line->data[" << arg_index << "]), out);\n";
-                        format_code << "\tprintf(\"done Analyzing V field "<< arg_index<<"\\n\");\n";
                         ++arg_index;
                         break;
                     case 'd':

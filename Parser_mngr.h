@@ -22,7 +22,7 @@ class Parser_mngr
 {
 public:
     ParserFunc create_parser(const std::string &format);
-    
+    //neu
     template <typename T>
     dataSet<T> *parse_multithreaded(const char *buffer, size_t buffer_size, size_t total_lines, const std::string &format, size_t num_threads = std::thread::hardware_concurrency(), size_t start_line = 1) // start_line ist 1 damit wir die Spaltenbeschriftungen überspringen können
     {
@@ -55,7 +55,7 @@ public:
         for (size_t t = 0; t < num_threads; ++t)
             result->size += thread_count[t];
 
-        printf("combining Buffer without tokenizing further: Combined Buffer size %zu\n",result->size);
+        printf("combining Buffer: Combined Buffer size %zu\n",result->size);
 
         result->data = (T *)malloc(sizeof(T) * result->size);
         for (size_t t = 0,offset = 0; t < num_threads; ++t)

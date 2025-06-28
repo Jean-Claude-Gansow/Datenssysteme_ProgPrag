@@ -111,7 +111,6 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
             {
                 T* out_ptr = buffer_ptr + out_idx;
                 int read = parse_line(&file_content[line_start], static_cast<void*>(out_ptr));
-
                 if (read <= 0 || (line_start + read) > block_end) break;
 
                 line_start += read;

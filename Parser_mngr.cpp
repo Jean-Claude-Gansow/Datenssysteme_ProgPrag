@@ -99,7 +99,7 @@ std::string Parser_mngr::generate_code(const std::string& func_name, const std::
         template_code.replace(pos, 13, func_name);
     while ((pos = template_code.find("{{FORMAT_CODE}}")) != std::string::npos)
         template_code.replace(pos, 15, format_code.str());
-
+    
     return template_code;
 }
 

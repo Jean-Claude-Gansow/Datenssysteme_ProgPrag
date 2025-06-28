@@ -9,7 +9,7 @@
 				"-fdiagnostics-color=always",
 				"-g",
 				"-O3",
-				"main.cpp","Evaluation_mngr.cpp", "Matching_mngr.cpp", "Parser_mngr.cpp", "Blocking_mngr.cpp",
+				"main.cpp","Evaluation_mngr.cpp", "Matching_mngr.cpp", "Parser_mngr.cpp",
 				"-o",
 				"dupDetec.out"
 			],

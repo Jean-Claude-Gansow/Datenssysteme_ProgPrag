@@ -5,7 +5,7 @@
 
 #include "constants.h"
 #include "Evaluation_mngr.h"
-#include "Blocking_mngr.h"
+#include "partitioning_mngr.h"
 #include "Matching_mngr.h"
 #include "Tokenization_mngr.h"
 #include "Parser_mngr.h"
@@ -32,8 +32,10 @@ int main(int argc, char** argv)
 
     Tokenization_mngr<12, single_t, laptop> *m_Laptop_tokenization_mngr = new Tokenization_mngr<12, single_t, laptop>({"12","single_t","laptop"});
     Tokenization_mngr<4, quintupel, storage_drive> *m_Storage_tokenization_mngr = new Tokenization_mngr<4, quintupel, storage_drive>({"4","quintupel","storage_drive"});
-    Blocking_mngr* m_blocking_mngr = new Blocking_mngr();
-    Matching_mngr* m_matching_mngr = new Matching_mngr();
+    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>();
+    Partitioning_mngr<quintupel,storage_drive,4> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,4>();
+    Matching_mngr<laptop>* m_matching_laptop_mngr = new Matching_mngr<laptop>();
+    Matching_mngr<storage_drive> *m_matching_storage_mngr = new Matching_mngr<storage_drive>();
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
     
     unsigned int figureOut = 0; //unknown by now, filling that in later
@@ -56,6 +58,8 @@ int main(int argc, char** argv)
     //rom_capacity: 3
     //
 
+    std::vector<category> laptop_partition_filters = {assembler_brand, assembler_modell, cpu_brand, ram_capacity};
+    std::vector<category> storage_partition_filters = {assembler_brand, assembler_modell, rom_capacity};
     //TODO: Listenbäume aufbauen. Format: Token;Token;Token;...Token\n -> index = line
     //TODO: Listen zuusammenführen -> Klassenindices können erst dann korrekt gebaut werden.
     m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_marken.tokenz",assembler_brand); //laptop brand
@@ -76,13 +80,12 @@ int main(int argc, char** argv)
     int start = clock();
     // 2. Multi-Threaded Parsing für alle Datasets
     dataSet<single_t>* dataSet1 = parser_mngr.parse_multithreaded<single_t>(file1.data(), file1.size(), file1.line_count(), "%_,%V", maxThreads);
-    m_Laptop_tokenization_mngr->tokenize_multithreaded(dataSet1, "%_,%V",maxThreads);
+    dataSet<laptop>* tokenized_laptops = m_Laptop_tokenization_mngr->tokenize_multithreaded(dataSet1, "%_,%V",maxThreads);
     printf("Parsed %zu lines from file1:\n", dataSet1->size);
     //print_Dataset(*dataSet1, "%_,%V");
 
     dataSet<quintupel>* dataSet2 = parser_mngr.parse_multithreaded<quintupel>(file2.data(), file2.size(), file2.line_count(), "%_,%s,%f,%s,%s,%V", maxThreads);
-    m_Storage_tokenization_mngr->tokenize_multithreaded(dataSet2,"%_,%s,%f,%s,%s,%V", maxThreads);
-    exit(0);
+    dataSet<storage_drive> *tokenized_storage = m_Storage_tokenization_mngr->tokenize_multithreaded(dataSet2, "%_,%s,%f,%s,%s,%V", maxThreads);
 
     printf("Parsed %zu lines from file2\n", dataSet2->size);
     print_Dataset(*dataSet2, "%_,%s,%f,%s,%s,%V");
@@ -93,10 +96,10 @@ int main(int argc, char** argv)
     print_Dataset(*dataSetSol1, "%d,%d");
 
 
-    dataSet<match>* dataSetSol2 = parser_mngr.parse_multithreaded<match>(file4.data(), file4.size(), file4.line_count(), "%d,%d", maxThreads);
+        //dataSet<match>* dataSetSol2 = parser_mngr.parse_multithreaded<match>(file4.data(), file4.size(), file4.line_count(), "%d,%d", maxThreads);
     
-    printf("Parsed %zu lines from file4\n", dataSetSol2->size);
-    print_Dataset(*dataSetSol2, "%d,%d");
+        //printf("Parsed %zu lines from file4\n", dataSetSol2->size);
+        //print_Dataset(*dataSetSol2, "%d,%d");
 
     // Zu Beginn auswählbares Dataset zum Ausgeben
     // Einfach hier den gewünschten Pointer setzen:
@@ -106,37 +109,43 @@ int main(int argc, char** argv)
     size_t printRows = 10;
     printRows = std::min(printRows, printDataSet->size);
 
-   /* printf("Ausgabe des ausgewählten Datasets (%zu Zeilen):\n", printRows);
+    printf("Ausgabe des ausgewählten Datasets (%zu Zeilen):\n", printRows);
     for(int i = 0; i < printRows; ++i) 
     {
             printf("%d, %d\n", printDataSet->c_arr()[i][0], printDataSet->c_arr()[i][1]);
-    }*/
+    }
 
     int elapsedParse = clock() - start;
     printf("time elapsed for reading Files: %.2f s\n", elapsedParse / (float)CLOCKS_PER_SEC);
 
     start = clock();
 
+
     printf("generating Blocks...\n");
 
-    block_t* blocksDS1 = m_blocking_mngr->generateBlocks(dataSet1->size, maxThreads);
-    block_t* blocksDS2 = m_blocking_mngr->generateBlocks(dataSet2->size, maxThreads);
+    // --- Partitionierung für Laptops ---
+    
+    dataSet<partition> *laptop_partitions = m_partitioning_laptop_mngr->partition_iterative(*tokenized_laptops,laptop_partition_filters,m_Laptop_tokenization_mngr);
+    // --- Partitionierung für Storage ---
+    dataSet<partition> *storage_partitions = m_partitioning_storage_mngr->partition_iterative(*tokenized_storage, storage_partition_filters, m_Storage_tokenization_mngr);
+
+    print_partitions_field(*laptop_partitions,1);
 
     int elapsedBlock = clock() - start;
     printf("time elapsed for generating Blocks: %.2f s\n", elapsedBlock / (float)CLOCKS_PER_SEC);
 
     start = clock();
 
-    match* matchesDS1 = m_matching_mngr->generateMatching(blocksDS1, figureOut, maxThreads);
-    match* matchesDS2 = m_matching_mngr->generateMatching(blocksDS2, figureOut, maxThreads);
+    //match* matchesDS1 = m_matching_mngr->generateMatching(blocksDS1, figureOut, maxThreads);
+    //match* matchesDS2 = m_matching_mngr->generateMatching(blocksDS2, figureOut, maxThreads);
 
     int elapsedMatch = clock() - start;
     printf("time elapsed for matching: %.2f s\n", elapsedMatch / (float)CLOCKS_PER_SEC);
 
     start = clock();
 
-    float DS1EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS1, dataSetSol1->c_arr(), maxThreads);
-    float DS2EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS2, dataSetSol2->c_arr(), maxThreads);
+    //float DS1EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS1, dataSetSol1->c_arr(), maxThreads);
+    //float DS2EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS2, dataSetSol2->c_arr(), maxThreads);
     
     int elapsedEval = clock() - start;
     printf("time elapsed for evaluation: %.2f s\n", elapsedEval / (float)CLOCKS_PER_SEC);
@@ -144,8 +153,8 @@ int main(int argc, char** argv)
     int elapsedTotal = clock() - start_total;
     printf("total time elapsed: %.2f s\n", elapsedTotal / (float)CLOCKS_PER_SEC);
 
-    printf("Evaluation of Duplicate Detection within DataSet1: %f\n", DS1EvaluationScore);
-    printf("Evaluation of Duplicate Detection within DataSet2: %f\n", DS2EvaluationScore);
+    //printf("Evaluation of Duplicate Detection within DataSet1: %f\n", DS1EvaluationScore);
+    //printf("Evaluation of Duplicate Detection within DataSet2: %f\n", DS2EvaluationScore);
 
     return 0;
 }

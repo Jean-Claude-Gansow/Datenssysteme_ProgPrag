@@ -57,6 +57,21 @@ inline void print_tuple(const uintptr_t* data, const char* format) {
     printf("\n");
 }
 
+// Gibt alle Partitionen sortiert aus, jeweils die Zahl des gewünschten Feldes (z.B. ID = 0, Pointer = 1)
+inline void print_partitions_field(const dataSet<partition> &partitions, size_t field_idx)
+{
+    for (size_t i = 0; i < partitions.size; ++i)
+    {
+        printf("Partition %zu: ", i);
+        for (size_t j = 0; j < partitions.data[i].size; ++j)
+        {
+            printf("%zu", (size_t)partitions.data[i].data[j].data[field_idx]);
+            if (j + 1 < partitions.data[i].size)
+                printf(", ");
+        }
+        printf("\n");
+    }
+}
 
 template<unsigned int N>
 void print_row(const tuple_t<N, uintptr_t>& row, const char* format) {
@@ -103,7 +118,6 @@ inline char* find_and_clean_csv(char* p) {
                     p += 2;
                 } else {
                     // End of quoted field
-                    *p = 0;
                     ++p;
                     //fprintf(stderr, "[csv] Ende quoted @ %p\n", (void*)p);
                     break;
