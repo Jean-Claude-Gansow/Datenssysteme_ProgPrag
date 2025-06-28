@@ -57,17 +57,8 @@ void* Parser_mngr::load_func(const std::string& func_name, const std::string& sy
     return sym;
 }
 
-// Hilfsfunktion zum Lesen einer Datei als String
-std::string read_file_as_string(const std::string &filename)
-{
-    std::ifstream in(filename);
-    std::stringstream buffer;
-    buffer << in.rdbuf();
-    return buffer.str();
-}
-
 std::string Parser_mngr::generate_code(const std::string& func_name, const std::string& format) {
-    std::string template_code = read_file_as_string("parser_template.cpp");
+    std::string template_code = read_file("parser_template.cpp");
 
     std::stringstream format_code;
     int arg_index = 0;

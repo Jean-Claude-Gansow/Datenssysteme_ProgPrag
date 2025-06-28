@@ -22,8 +22,7 @@ class Parser_mngr
 {
 public:
     ParserFunc create_parser(const std::string &format);
-    const std::vector<ParserFunc> &get_all_parsers() const { return parsers; }
-
+    
     template <typename T>
     dataSet<T> *parse_multithreaded(const char *buffer, size_t buffer_size, size_t total_lines, const std::string &format, size_t num_threads = std::thread::hardware_concurrency(), size_t start_line = 1) // start_line ist 1 damit wir die Spaltenbeschriftungen überspringen können
     {

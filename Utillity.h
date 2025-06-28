@@ -4,6 +4,8 @@
 #include <string>
 #include <cstdint>
 #include <typeinfo>
+#include <fstream>
+#include <sstream>
 #include "constants.h"
 #include "DataTypes.h"
 
@@ -71,12 +73,13 @@ inline void print_Dataset(const dataSet<t>& dataset, const char* format)
     }
 }
 
-#ifndef READ_FILE_STR_FUNC
-#define READ_FILE_STR_FUNC
-
-
-
-#endif
+inline std::string read_file(const std::string &filename)
+{
+    std::ifstream in(filename);
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    return buffer.str();
+}
 
 inline char* find_and_clean_csv(char* p) {
     char* start = p;
@@ -94,12 +97,13 @@ inline char* find_and_clean_csv(char* p) {
             {
                 if (*(p + 1) == '"') 
                 {
-                    // Escaped quote ("")
+                    // Escaped quote ("") //nachsehen was das macht, überarbeiten, funktionier verm. nicht korrekt
                     *dst++ = Escape;
                     //fprintf(stderr, "[csv] Escaped quote \"\" gefunden @ %p\n", (void*)p);
                     p += 2;
                 } else {
                     // End of quoted field
+                    *p = 0;
                     ++p;
                     //fprintf(stderr, "[csv] Ende quoted @ %p\n", (void*)p);
                     break;

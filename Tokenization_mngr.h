@@ -40,12 +40,11 @@ public:
     static const int ALPHABET_SIZE = 36+3; // Anzahl der Buchstaben im Alphabet + 2 hilfszeichen für leerschritte 
 public:
     token_node* child[ALPHABET_SIZE];  // 36 mögliche Buchstaben
-    char id_index;    // Dieses Token endet hier
+    size_t id_index;    // Dieses Token endet hier
     token_node() : id_index(0)
     {
         memset(this->child,0,sizeof(this->child));
     }
-
     ~token_node()
     {
         for (int i = 0; i < ALPHABET_SIZE; ++i)
@@ -85,54 +84,109 @@ public:
 
         semFound: //found a semicolon, inserting from last token
         *p = 0; //mark end of string
-        insert(tokenbegin,lineIndex,p-tokenbegin); //insert, until current position, at current index, no incement, since we stay at this line
+        insert(tokenbegin,lineIndex,(p-tokenbegin)); //insert, until current position, at current index, no incement, since we stay at this line
         ++p; //move read to next possible character
         tokenbegin = p;
         goto *jumpTable[*(p)]; //jump to whatever we find, should be the first char of the next token
 
         spaceFound:
         *p = 0;             // mark end of string
-        insert(tokenbegin, lineIndex++,p - tokenbegin); // insert, until current position
+        insert(tokenbegin, lineIndex++,(p - tokenbegin)-1); // insert, until current position
         ++p;                // move read to next possible character
         tokenbegin = p;
         goto *jumpTable[*(p)]; // jump to whatever we find, should be the first char of the next token
 
         eof:
-        return p-file.data();
+        *p = 0;                                          // mark end of string
+        insert(tokenbegin, lineIndex++, (p - tokenbegin)); // insert, until current position
+        return p - file.data();
     }
 
-    char contains(const std::string &word) const
+    token get_possible_index(char *p) const
     {
+        void* jumpTable[ALPHABET_SIZE] = {};
+
         const token_node *node = this;
-        for (char c : word)
+        char *current = p;
+
+        while (*current)
         {
+            unsigned char c = *current;
+            //if (c < ALPHABET_ANCHOR) //sollte nicht passieren können
+                //return 0; // Optional: Zeichen außerhalb des gültigen Bereichs
+            if(c < ALPHABET_ANCHOR || c > 127){*current = whitespace;c = *current;}
+            //printf("jumping to childnode: %c\n",c);
             node = node->child[c - ALPHABET_ANCHOR];
+            
             if (node == nullptr)
+            {
                 return 0;
+            }
+            else if (node->id_index > 0)
+            {
+                printf("\n");
+                return node->id_index;
+            }
+            ++current;
         }
-        return node->id_index; // ist dieser != 0 - Toekn Gefunden und information was es ist gleichzeitig numerisch angegeben
+
+        return 0;
+    }
+
+    void print() const {
+        print_trie(this, "", '\0', true);
+    }
+
+    void print_trie(const token_node *node, const std::string &prefix, char edge, bool isLast) const
+    {
+        if (!node)
+            return;
+
+        // Nur anzeigen, wenn der aktuelle Buchstabe gesetzt ist (außer Wurzel)
+        if (edge != '\0')
+        {
+            std::cout << prefix;
+            std::cout << (isLast ? " └─ " : " ├─ ");
+            std::cout << edge;
+
+            if (node->id_index != 0)
+            {
+                std::cout << " : index(" << static_cast<int>(node->id_index) << ")";
+            }
+            std::cout << "\n";
+        }
+
+        // Neue Prefix für die nächste Ebene
+        std::string newPrefix = prefix + (isLast ? "    " : " │  ");
+
+        // Zähle echte Kinder (nicht-null)
+        std::vector<int> nonNullIndices;
+        for (int i = 0; i < 39; ++i)
+        {
+            if (node->child[i])
+            {
+                nonNullIndices.push_back(i);
+            }
+        }
+
+        // Für jeden Kindknoten rekursiv aufrufen
+        for (size_t i = 0; i < nonNullIndices.size(); ++i)
+        {
+            int idx = nonNullIndices[i];
+            char nextChar = static_cast<char>(idx + ALPHABET_ANCHOR);
+            bool last = (i == nonNullIndices.size() - 1);
+            print_trie(node->child[idx], newPrefix, nextChar, last);
+        }
     }
 
 private:
-    std::string make_token_compatible(const std::string& token)
-    {
-        std::string compatible_token = token;
-        for (int i = 0; i < token.size();i++)
-        {
-            compatible_token[i] = lut[token[i]];
-        }
-        return compatible_token;
-    }
-
     void insert(const char* word,size_t index,size_t len)
     {
         token_node* node = this;
         //std::string compatible_word = make_token_compatible(word); //rewrite, for not needed from loading from file, write version with this for direct use from insert 
         for (int i = 0; i < len; i++)
         {
-            printf("\\-->%c",word[i]);
             int idx = word[i] - ALPHABET_ANCHOR;
-            printf("--%d\n",idx);
             if (node->child[idx] == nullptr)
             {
                 node->child[idx] = new token_node();
@@ -144,42 +198,60 @@ private:
 
 };
 
+
+inline static size_t numTokenizers = 0; //keep track of how many tokenizers there is
+
 template <size_t N,typename in_buf_t,typename out_buf_t>
 class Tokenization_mngr
 {
-    using TokenizerFunc = size_t (*)(in_buf_t *bufferEntry, char **out, Tokenization_mngr *tkm); 
+    using TokenizerFunc = size_t (*)(in_buf_t *bufferEntry, token**out, Tokenization_mngr *tkm); 
+
 public :
-    Tokenization_mngr<N,in_buf_t,out_buf_t>(std::vector<std::string> template_types)
+    Tokenization_mngr(std::vector<std::string> template_types)
     {
+        this->m_tokenizer_mngr_id = numTokenizers++;
         for(std::string s : template_types)
         {
             this->template_type_str.push_back(s);
         }
     }
+
+    Tokenization_mngr(std::vector<std::string> template_types,const category priority[N])
+    {
+        
+
+        this->m_tokenizer_mngr_id = numTokenizers++;
+        for (std::string s : template_types)
+        {
+            this->template_type_str.push_back(s);
+        }
+    }
+
     // Token-Liste aus Datei laden (ein Token pro ; pro Zeile)
     bool loadTokenList(const std::string &filename, token_class tk)
     {
         printf("importing file: %s\n", filename.c_str());
-        return classes[tk].fimport_token(filename.c_str());        
+        size_t ret = classes[tk].fimport_token(filename.c_str());;
+        classes[tk].print();
+        return true;     
     }
 
-    void addToken(const std::string &token,token_class  tk)
+    void addToken(const std::string &token,token_class tk)
     {
         classes[tk].insert(token);
     }
 
     // Prüfen, ob ein Token enthalten ist
-    char contains(const std::string &token,token_class tk) const
+    token contains(char* token,token_class tk) const
     {
-        
-        return classes[tk].contains(token);
+        return classes[tk].get_possible_index(token);
     }
 
     dataSet<out_buf_t>* tokenize_multithreaded(dataSet<in_buf_t>* ds,const char* format,size_t num_threads)
     {
-        TokenizerFunc tokenizer = create_tokenizer(format);
+        TokenizerFunc tokenizer = this->create_tokenizer(format);
 
-        std::function<int(in_buf_t*, char **, Tokenization_mngr*)> tokenize_field = [tokenizer](in_buf_t* line, char **out, Tokenization_mngr* tkm) { return tokenizer(line, out, tkm); };
+        std::function<int(in_buf_t*, token**, Tokenization_mngr*)> tokenize_field = [tokenizer](in_buf_t* line, token**out, Tokenization_mngr* tkm) { return tokenizer(line, out, tkm); };
 
         printf("creating thread buffer for %zu threads...\n", num_threads);
 
@@ -190,10 +262,12 @@ public :
         threaded_tokenization(ds->data,ds->size,tokenize_field,num_threads,thread_buffer);
         
         dataSet<out_buf_t>* ret = new dataSet<out_buf_t>();
+        ret->data = new out_buf_t[ds->size];
 
         //füge Buffer zusammen
         for(int ind = 0,offset = ds->size/num_threads; ind < num_threads;ind++)
         {
+            printf("Attaching Buffer %d of size %d to dataSet[%d]\n",ind,offset,offset*ind);
             memcpy(&ret->data[offset*ind],thread_buffer[ind],offset);
         }
         return ret;
@@ -201,27 +275,72 @@ public :
 
     TokenizerFunc create_tokenizer(const char* format)
     {
-        std::string name = "tokenizer_" + std::to_string(tokenizer.size());
-    
+        printf("currrent tokenizers:%ld\n",tokenizers.size());
+        std::string name = "tokenizer_" + std::to_string(this->m_tokenizer_mngr_id) + "_" + std::to_string(tokenizers.size());
+
         std::string code = generate_code(name,format);
 
         // 2. Kompilieren
         compile_code(code, name);
 
         // 3. Laden
-        void* fn_ptr = load_func(name, name); // "parse_line" ist der Name der generierten Funktion
+        void* fn_ptr = load_func(name, name); // "tokenize_line" ist der Name der generierten Funktion
         
         // 4. Cast und speichern
         TokenizerFunc fn = reinterpret_cast<TokenizerFunc>(fn_ptr);
-        tokenizer.push_back(fn);
-
+        tokenizers.push_back(fn);
+        printf("added local tokenizer count now:%ld\n", tokenizers.size());
         return fn;
     }
 
     void filter_tokens(char *text, out_buf_t **buffer) const
     {
+        printf("looking for tokens in: %s\n", text);
+
+        char *p = text;
+
+        while (*p)
+        {
+            // Überspringe Whitespaces
+            while (*p && *p==whitespace)
+            {
+                ++p;
+            }
+
+            if (!*p)
+                break; // EOL erreicht
+
+            // Token-Suche starten
+            bool matched = false;
+            for (int i = 0; i < N; ++i)
+            {
+                token index = contains(p, static_cast<category>(i));
+                if (index > 0)
+                {
+                    printf("found Token in category %d: %d\n", i, (token)index);
+                    // Speicher den Index des gefundenen Tokens
+                    (*((token**)buffer))[i] = index;
+
+                    // p um die Länge des gefundenen Tokens weiterschieben
+                    while (*p && *p!=whitespace)
+                        ++p;
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched)
+            {
+                // Kein Token erkannt → weiter zum nächsten Wort
+                while (*p && *p != whitespace)
+                    ++p;
+            }
+        }
+        /*
+        printf("looking for toklens in: %s\n",text);
+        
         printf("filtering: %s\n",text);
-        void *jumpTable[128] = {
+        void *jumpTable[256] = {
             &&eol, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,             // 0–7
             &&loop, &&loop, &&eol, &&loop, &&loop, &&loop, &&loop, &&loop,             // 8–15
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 16–23
@@ -237,63 +356,95 @@ public :
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 96–103
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 104–111
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 112–119
-            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop_whitespace, &&loop, &&loop  // 120–127
+            &&loop, &&loop, &&loop, &&loop, &&loop_whitespace, &&loop, &&loop, &&loop, // 120–127
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 0–7
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 8–15
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 16–23
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 24–31
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 32–39
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 40–47
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 48–55
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 56–63
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 64–71
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 72–79
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 80–87
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 88–95
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 96–103
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 104–111
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 112–119
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop             // 120–127
         };
 
-        void *jumpTableWhite[128] = {
-            &&eol, &&check, &&check, &&check, &&check, &&check, &&check, &&check,              // 0–7
-            &&check, &&check, &&eol, &&check, &&check, &&check, &&check, &&check,              // 8–15
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 16–23
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 24–31
-            &&loop_whitespace, &&check, &&check, &&check, &&check, &&check, &&check, &&check,  // 32–39
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 40–47
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 48–55
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 56–63
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 64–71
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 72–79
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 80–87
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 88–95
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 96–103
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 104–111
-            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,            // 112–119
-            &&check, &&check, &&check, &&check, &&check, &&loop_whitespace, &&check, &&check // 120–127
+        void *jumpTableWhite[256] = {
+            &&eol, &&check, &&check, &&check, &&check, &&check, &&check, &&check,             // 0–7
+            &&check, &&check, &&eol, &&check, &&check, &&check, &&check, &&check,             // 8–15
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 16–23
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 24–31
+            &&loop_whitespace, &&check, &&check, &&check, &&check, &&check, &&check, &&check, // 32–39
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 40–47
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 48–55
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 56–63
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 64–71
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 72–79
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 80–87
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 88–95
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 96–103
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 104–111
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 112–119
+            &&check, &&check, &&check, &&check, &&loop_whitespace, &&check, &&check, &&check,        // 120–127
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 0–7
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 8–15
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 16–23
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 24–31
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 32–39
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 40–47
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 48–55
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 56–63
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 64–71
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 72–79
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 80–87
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 88–95
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 96–103
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 104–111
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check,           // 112–119
+            &&check, &&check, &&check, &&check, &&check, &&check, &&check, &&check            // 120–127
         };
 
-        bool check[N];
-        memset(check, true, N);
         char *p = text;
 
         goto check;
 
-    loop: // no matter what is encountered exept for whitespace we skip
+        loop: // no matter what is encountered exept for whitespace we skip
         printf("-");
-        goto *jumpTable[*(p++)];
+        goto *jumpTable[*((unsigned char*)(p++))];
 
-    loop_whitespace: // no matter what other than whitespace is encountered, we check for tokens
+        loop_whitespace: // no matter what other than whitespace is encountered, we check for tokens
         printf("_");
-        goto *jumpTableWhite[*(p++)];
+        goto *jumpTableWhite[*((unsigned char*)(p++))];
 
-    check: // we encountered something after whitespace, that isnt whitespace, we check for a token
+        check: // we encountered something after whitespace, that isnt whitespace, we check for a token
         printf("|");
         for (int i = 0; i < N;++i)
-        {
-            char index = contains(std::string(p), static_cast<category>(i)); // check whether the word at the current pointer is a token of class i
+        {   
+            printf("checking category:%d\n",i);
+            char index = contains(p, static_cast<category>(i)); // check whether the word at the current pointer is a token of class i
+            printf("\n");
             if (index > 0)
             {
+                printf("found Token %d!\n", (int)index);
                 *((char **)buffer)[i] = index;
-                printf("found Token %d!\n",(int)index);
-                goto *jumpTable[*(p++)]; // if a token was identified, we continue looking for further tokens in coming words.
+                goto *jumpTable[*((unsigned char*)(p))]; // if a token was identified, we continue looking for further tokens in coming words.
             }
         }
-        goto *jumpTable[*(p++)];
+        goto *jumpTable[*((unsigned char*)(p++))];
 
-    eol:
+        eol:
         printf("\n");
-        return;
+        return;*/
     }
 
 private:
-    inline void threaded_tokenization(in_buf_t *buffer, size_t buffer_size, std::function<int(in_buf_t*, char**,Tokenization_mngr* tkm)> tokenize_entry, size_t num_threads,out_buf_t** thread_buffers)
+    inline void threaded_tokenization(in_buf_t *buffer, size_t buffer_size, std::function<int(in_buf_t*, token**,Tokenization_mngr* tkm)> tokenize_entry, size_t num_threads,out_buf_t** thread_buffers)
     {
         size_t *offsets = new size_t[num_threads + 1];
         
@@ -325,8 +476,8 @@ private:
 
                 for (int i = block_start; i < block_end; i++)
                 {
-                    //printf("buffer[%d]: %s",i,(char*)(buffer[i].data[0]));
-                    tokenize_entry(&buffer[i],(char**)(&buffer_ptr),this);
+                    //printf("buffer[%d]: %s",i,(token*)(buffer[i].data[0]));
+                    tokenize_entry(&buffer[i],(token**)(&buffer_ptr),this);
                 }
             });
         }
@@ -369,13 +520,7 @@ private:
     }
 
     // Hilfsfunktion zum Lesen einer Datei als String
-    std::string read_file(const std::string &filename)
-    {
-        std::ifstream in(filename);
-        std::stringstream buffer;
-        buffer << in.rdbuf();
-        return buffer.str();
-    }
+
 
     std::string generate_code(const std::string &func_name, const std::string &format)
     {
@@ -394,14 +539,16 @@ private:
                     case '_':
                         break;
                     case 's':
-                        format_code << "tkm->filter_tokens((char*)(line->data["<<arg_index<<"]), out);\n";
+                        format_code << "\ttkm->filter_tokens((char*)(line->data["<<arg_index<<"]), out);\n";
+                        format_code << "\tprintf(\"done Analyzing s field "<< arg_index<<"\\n\");\n";
                         ++arg_index;
                         break;
                     case 'f':
                         ++arg_index;
                         break;
                     case 'V':
-                        format_code << "tkm->filter_tokens((char*)(line->data[" << arg_index << "]), out);\n";
+                        format_code << "\ttkm->filter_tokens((char*)(line->data[" << arg_index << "]), out);\n";
+                        format_code << "\tprintf(\"done Analyzing V field "<< arg_index<<"\\n\");\n";
                         ++arg_index;
                         break;
                     case 'd':
@@ -434,6 +581,8 @@ private:
         std::string filename = name + ".cpp";
         std::string sofile = name + ".so";
 
+        printf("creating tokenizer %s\n",filename.c_str());
+
         std::ofstream out(filename);
         out << cpp_code;
         out.close();
@@ -447,19 +596,10 @@ private:
 
     int numClasses = N; 
     token_node classes[N]; 
-
+    size_t  m_tokenizer_mngr_id = 0;
     std::vector<void *> hSoFile;
-    std::vector<TokenizerFunc> tokenizer;
+    std::vector<TokenizerFunc> tokenizers;
     std::vector<std::string> template_type_str;
-    int tokenizer_index = 0;
-
-
-    // Hilfsfunktion zum Trimmen von Strings
-    static void trim(std::string &s)
-    {
-        s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
-        s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch)          { return !std::isspace(ch); }).base(),s.end());
-    }
 };
 
 #endif // TOKENIZATION_MNGR_H

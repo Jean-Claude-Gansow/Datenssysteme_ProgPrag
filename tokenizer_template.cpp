@@ -4,7 +4,7 @@
 extern "C" size_t {{FUNC_NAME}} ({{TEMP_TYPE_IN}} *line, {{TEMP_TYPE_OUT}} **out, Tokenization_mngr<{{TEMP_TYPES}}>* tkm)
 {
     
-    {{FORMAT_CODE}}
+{{FORMAT_CODE}}
     return 0;
 }
 

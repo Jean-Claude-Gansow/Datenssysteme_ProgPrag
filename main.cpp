@@ -38,17 +38,23 @@ int main(int argc, char** argv)
     
     unsigned int figureOut = 0; //unknown by now, filling that in later
     unsigned int maxThreads = std::thread::hardware_concurrency();
-    maxThreads = maxThreads > 1 ? 1 : 1; //in case thread count failed set it to one thread
+    maxThreads = maxThreads > maxThreads ? 1 : 1; //in case thread count failed set it to one thread
 
     Parser_mngr parser_mngr;
 
     int start_total = clock();
 
     // 1. Datei-Objekte erzeugen
-    File file1(files[0]);
-    File file2(files[1]);
+    File file1(files[0],true);
+    File file2(files[1],true);
     File file3(files[2],true);
     File file4(files[3],true);
+
+    //assembler_brand: 0
+    //assembler_modell: 1
+    //ram_capacity: 2
+    //rom_capacity: 3
+    //
 
     //TODO: Listenbäume aufbauen. Format: Token;Token;Token;...Token\n -> index = line
     //TODO: Listen zuusammenführen -> Klassenindices können erst dann korrekt gebaut werden.
@@ -65,16 +71,18 @@ int main(int argc, char** argv)
 
     m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_marken.tokenz",assembler_brand);
     //m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_modelle.tokenz", assembler_brand);
-    m_Storage_tokenization_mngr->loadTokenList("../data/rom_size.tokenz",rom_capacity);
+    m_Storage_tokenization_mngr->loadTokenList("../data/ram_size.tokenz",rom_capacity);
 
     int start = clock();
     // 2. Multi-Threaded Parsing für alle Datasets
     dataSet<single_t>* dataSet1 = parser_mngr.parse_multithreaded<single_t>(file1.data(), file1.size(), file1.line_count(), "%_,%V", maxThreads);
     m_Laptop_tokenization_mngr->tokenize_multithreaded(dataSet1, "%_,%V",maxThreads);
     printf("Parsed %zu lines from file1:\n", dataSet1->size);
-    print_Dataset(*dataSet1, "%_,%V");
+    //print_Dataset(*dataSet1, "%_,%V");
 
     dataSet<quintupel>* dataSet2 = parser_mngr.parse_multithreaded<quintupel>(file2.data(), file2.size(), file2.line_count(), "%_,%s,%f,%s,%s,%V", maxThreads);
+    m_Storage_tokenization_mngr->tokenize_multithreaded(dataSet2,"%_,%s,%f,%s,%s,%V", maxThreads);
+    exit(0);
 
     printf("Parsed %zu lines from file2\n", dataSet2->size);
     print_Dataset(*dataSet2, "%_,%s,%f,%s,%s,%V");
