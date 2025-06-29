@@ -45,7 +45,7 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
                 ++line_start;
 
             ++thread_counts[0];
-            //printf("Thread 0: Verarbeitet Zeichen %zu, Output-Index %zu\n", line_start, thread_counts[0]);
+            printf("Thread 0: Verarbeitet Zeichen %zu, Output-Index %zu\n", line_start, thread_counts[0]);
         }
         return;
     }
@@ -85,7 +85,7 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
     size_t expected_lines = total_lines / num_threads;
     size_t buffered_lines = expected_lines + (size_t)((expected_lines / 10)+2); // bei kleinen Dateien fällt der Puffer konstant zu klein aus, daher +2
     for (size_t t = 0; t < num_threads; ++t) {
-        //printf("Thread %zu: Reserviere Puffer für %zu Zeilen\n", t, buffered_lines);
+        printf("Thread %zu: Reserviere Puffer für %zu Zeilen\n", t, buffered_lines);
         thread_buffers[t] = new T[buffered_lines]; //allocated buffer per thread
         thread_counts[t] = 0;
         printf("Thread %zu: -> [%zu - %zu]\n", t, real_offsets[t], real_offsets[t+1]);
@@ -106,22 +106,25 @@ inline void threaded_line_split(const char* file_content, const char* format,  s
         {
             size_t line_start = block_start;
             size_t out_idx = 0;
-
             while (line_start < block_end)
             {
                 T* out_ptr = buffer_ptr + out_idx;
                 int read = parse_line(&file_content[line_start], static_cast<void*>(out_ptr));
-                if (read <= 0 || (line_start + read) > block_end) break;
+                if (read <= 0 || (line_start + read) > block_end)
+                { 
+                    break; 
+                }
 
                 line_start += read;
-                if (line_start < block_end && (file_content[line_start] == '\0' || file_content[line_start] == '\n' || file_content[line_start] == '\r')) // skip line endings
+                if (line_start < block_end && (file_content[line_start] == '\n' || file_content[line_start] == '\r')) // skip line endings
+                {    
                     ++line_start;
-
+                }
                 ++out_idx; //after each line processed go to next writing position
-                //printf("Thread %ld: %zu -> buf [%zu]\n", t,line_start, thread_counts[t]++);
+                //thread_counts[t]++;
             }
 
-            *count_ptr = out_idx;
+            thread_counts[t] = out_idx;
         });
     }
 

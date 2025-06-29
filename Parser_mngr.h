@@ -53,7 +53,10 @@ public:
         dataSet<T> *result = new dataSet<T>();
         result->size = 0;
         for (size_t t = 0; t < num_threads; ++t)
+        {
+            printf("thread %zu counted %zu lines\n",t,thread_count[t]);
             result->size += thread_count[t];
+        }
 
         printf("combining Buffer: Combined Buffer size %zu\n",result->size);
 

@@ -86,6 +86,7 @@ inline void print_Dataset(const dataSet<t>& dataset, const char* format)
     {
         print_row<(unsigned int)(sizeof(t)/sizeof(uintptr_t))>(dataset.data[i], format);
     }
+    printf("done printing\n");
 }
 
 inline std::string read_file(const std::string &filename)

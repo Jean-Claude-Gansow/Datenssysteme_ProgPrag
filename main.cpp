@@ -40,7 +40,7 @@ int main(int argc, char** argv)
     
     unsigned int figureOut = 0; //unknown by now, filling that in later
     unsigned int maxThreads = std::thread::hardware_concurrency();
-    maxThreads = maxThreads > maxThreads ? 1 : 1; //in case thread count failed set it to one thread
+    maxThreads = maxThreads > 0 ? maxThreads : 1; //in case thread count failed set it to one thread
 
     Parser_mngr parser_mngr;
 
@@ -58,8 +58,8 @@ int main(int argc, char** argv)
     //rom_capacity: 3
     //
 
-    std::vector<category> laptop_partition_filters = {assembler_brand, assembler_modell, cpu_brand, ram_capacity};
-    std::vector<category> storage_partition_filters = {assembler_brand, assembler_modell, rom_capacity};
+    std::vector<category> laptop_partition_hierarchy = {assembler_brand, assembler_modell, cpu_brand, ram_capacity};
+    std::vector<category> storage_partition_hierarchy = {assembler_brand, assembler_modell, rom_capacity};
     //TODO: Listenbäume aufbauen. Format: Token;Token;Token;...Token\n -> index = line
     //TODO: Listen zuusammenführen -> Klassenindices können erst dann korrekt gebaut werden.
     m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_marken.tokenz",assembler_brand); //laptop brand
@@ -78,58 +78,49 @@ int main(int argc, char** argv)
     m_Storage_tokenization_mngr->loadTokenList("../data/ram_size.tokenz",rom_capacity);
 
     int start = clock();
+
     // 2. Multi-Threaded Parsing für alle Datasets
     dataSet<single_t>* dataSet1 = parser_mngr.parse_multithreaded<single_t>(file1.data(), file1.size(), file1.line_count(), "%_,%V", maxThreads);
-    dataSet<laptop>* tokenized_laptops = m_Laptop_tokenization_mngr->tokenize_multithreaded(dataSet1, "%_,%V",maxThreads);
     printf("Parsed %zu lines from file1:\n", dataSet1->size);
-    //print_Dataset(*dataSet1, "%_,%V");
+    print_Dataset(*dataSet1, "%_,%V");
 
     dataSet<quintupel>* dataSet2 = parser_mngr.parse_multithreaded<quintupel>(file2.data(), file2.size(), file2.line_count(), "%_,%s,%f,%s,%s,%V", maxThreads);
-    dataSet<storage_drive> *tokenized_storage = m_Storage_tokenization_mngr->tokenize_multithreaded(dataSet2, "%_,%s,%f,%s,%s,%V", maxThreads);
-
     printf("Parsed %zu lines from file2\n", dataSet2->size);
     print_Dataset(*dataSet2, "%_,%s,%f,%s,%s,%V");
 
-    dataSet<match>* dataSetSol1 = parser_mngr.parse_multithreaded<match>(file3.data(), file3.size(), file3.line_count(), "%d,%d", maxThreads);
-    
-    printf("Parsed %zu lines from file3\n", dataSetSol1->size);
-    print_Dataset(*dataSetSol1, "%d,%d");
+    //dataSet<match>* dataSetSol1 = parser_mngr.parse_multithreaded<match>(file3.data(), file3.size(), file3.line_count(), "%d,%d", maxThreads);
+    //printf("Parsed %zu lines from file3\n", dataSetSol1->size);
+    //print_Dataset(*dataSetSol1, "%d,%d");
 
-
-        //dataSet<match>* dataSetSol2 = parser_mngr.parse_multithreaded<match>(file4.data(), file4.size(), file4.line_count(), "%d,%d", maxThreads);
-    
-        //printf("Parsed %zu lines from file4\n", dataSetSol2->size);
-        //print_Dataset(*dataSetSol2, "%d,%d");
-
-    // Zu Beginn auswählbares Dataset zum Ausgeben
-    // Einfach hier den gewünschten Pointer setzen:
-    auto* printDataSet = dataSetSol1; // z.B. dataSet1, dataSet2, dataSetSol1, dataSetSol2
-
-    // Anzahl der Zeilen, die ausgegeben werden sollen (z.B. 10)
-    size_t printRows = 10;
-    printRows = std::min(printRows, printDataSet->size);
-
-    printf("Ausgabe des ausgewählten Datasets (%zu Zeilen):\n", printRows);
-    for(int i = 0; i < printRows; ++i) 
-    {
-            printf("%d, %d\n", printDataSet->c_arr()[i][0], printDataSet->c_arr()[i][1]);
-    }
+    //dataSet<match>* dataSetSol2 = parser_mngr.parse_multithreaded<match>(file4.data(), file4.size(), file4.line_count(), "%d,%d", maxThreads);
+    //printf("Parsed %zu lines from file4\n", dataSetSol2->size);
+    //print_Dataset(*dataSetSol2, "%d,%d");
 
     int elapsedParse = clock() - start;
     printf("time elapsed for reading Files: %.2f s\n", elapsedParse / (float)CLOCKS_PER_SEC);
-
+    printf("\n\n================================================================================================================================\n\n");
     start = clock();
+    printf("tokenizing Data...\n");
 
+    dataSet<laptop> *tokenized_laptops = m_Laptop_tokenization_mngr->tokenize_multithreaded(dataSet1, "%_,%V", maxThreads);
+    dataSet<storage_drive> *tokenized_storage = m_Storage_tokenization_mngr->tokenize_multithreaded(dataSet2, "%_,%s,%f,%s,%s,%V", maxThreads);
 
-    printf("generating Blocks...\n");
+    printf("tokenized dataset laptops: size: %zu\n",tokenized_laptops->size);
+    printf("tokenized dataset storage: size: %zu\n", tokenized_storage->size);
 
-    // --- Partitionierung für Laptops ---
-    
-    dataSet<partition> *laptop_partitions = m_partitioning_laptop_mngr->partition_iterative(*tokenized_laptops,laptop_partition_filters,m_Laptop_tokenization_mngr);
-    // --- Partitionierung für Storage ---
-    dataSet<partition> *storage_partitions = m_partitioning_storage_mngr->partition_iterative(*tokenized_storage, storage_partition_filters, m_Storage_tokenization_mngr);
+    tokenized_laptops->print();
+    tokenized_storage->print();
+
+    int elapsedTokenize = clock() - start;
+    printf("\n\n==================================================================================================================================\n\n");
+    printf("time elapsed for tokenizing Datasets: %.2f s\n", elapsedParse / (float)CLOCKS_PER_SEC);
+    printf("generating Partitions...\n");
+
+    dataSet<partition> *laptop_partitions = m_partitioning_laptop_mngr->create_partitions(*tokenized_laptops, m_Laptop_tokenization_mngr, laptop_partition_hierarchy);
+    dataSet<partition> *storage_partitions = m_partitioning_storage_mngr->create_partitions(*tokenized_storage, m_Storage_tokenization_mngr, storage_partition_hierarchy);
 
     print_partitions_field(*laptop_partitions,1);
+    print_partitions_field(*storage_partitions, 1);
 
     int elapsedBlock = clock() - start;
     printf("time elapsed for generating Blocks: %.2f s\n", elapsedBlock / (float)CLOCKS_PER_SEC);
@@ -149,9 +140,11 @@ int main(int argc, char** argv)
     
     int elapsedEval = clock() - start;
     printf("time elapsed for evaluation: %.2f s\n", elapsedEval / (float)CLOCKS_PER_SEC);
+    printf("\n\n==================================================================================================================================\n\n");
 
     int elapsedTotal = clock() - start_total;
     printf("total time elapsed: %.2f s\n", elapsedTotal / (float)CLOCKS_PER_SEC);
+    printf("\n\n==================================================================================================================================\n\n");
 
     //printf("Evaluation of Duplicate Detection within DataSet1: %f\n", DS1EvaluationScore);
     //printf("Evaluation of Duplicate Detection within DataSet2: %f\n", DS2EvaluationScore);

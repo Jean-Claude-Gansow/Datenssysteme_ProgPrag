@@ -203,7 +203,7 @@ inline static size_t numTokenizers = 0; //keep track of how many tokenizers ther
 template <size_t N,typename in_buf_t,typename out_buf_t>
 class Tokenization_mngr
 {
-    using TokenizerFunc = size_t (*)(in_buf_t *bufferEntry, token**out, Tokenization_mngr *tkm);
+    using TokenizerFunc = size_t (*)(in_buf_t *bufferEntry, out_buf_t* out, Tokenization_mngr *tkm);
 public:
     size_t m_class_tokens_found[N];
 public:
@@ -250,24 +250,30 @@ public:
     {
         TokenizerFunc tokenizer = this->create_tokenizer(format);
 
-        std::function<int(in_buf_t*, token**, Tokenization_mngr*)> tokenize_field = [tokenizer](in_buf_t* line, token**out, Tokenization_mngr* tkm) { return tokenizer(line, out, tkm); };
+        std::function<int(in_buf_t*, out_buf_t*, Tokenization_mngr*)> tokenize_field = [tokenizer](in_buf_t* line, out_buf_t*out, Tokenization_mngr* tkm) { return tokenizer(line, out, tkm); };
 
         printf("creating thread buffer for %zu threads...\n", num_threads);
 
         // 1. Pro Thread eigenen Buffer + Counter anlegen
-        out_buf_t** thread_buffer = new out_buf_t*[ds->size];
+        out_buf_t** thread_buffer = new out_buf_t*[num_threads];
         
         //TODO für morgen: thread counts o.ä. mit einbauen um das zusammenfügen leichter zu machen
         threaded_tokenization(ds->data,ds->size,tokenize_field,num_threads,thread_buffer);
         
         dataSet<out_buf_t>* ret = new dataSet<out_buf_t>();
         ret->data = new out_buf_t[ds->size];
+        ret->size = ds->size;
 
         //füge Buffer zusammen
-        for(int ind = 0,offset = ds->size/num_threads; ind < num_threads;ind++)
+        size_t base_block = ds->size / num_threads;
+        size_t remainder = ds->size % num_threads;
+        size_t current = 0;
+        for (size_t t = 0; t < num_threads; ++t)
         {
-            printf("Attaching Buffer %d of size %d to dataSet[%d]\n",ind,offset,offset*ind);
-            memcpy(&ret->data[offset*ind],thread_buffer[ind],offset);
+            size_t block_size = base_block + (t < remainder ? 1 : 0);
+            printf("Attaching Buffer %zu of size %zu to dataSet[%zu]\n", t, block_size, current);
+            memcpy(&ret->data[current], thread_buffer[t], block_size * sizeof(out_buf_t));
+            current += block_size;
         }
         return ret;
     }
@@ -290,7 +296,7 @@ public:
         return fn;
     }
 
-    void filter_tokens(char *text, out_buf_t **buffer)
+    void filter_tokens(char *text, out_buf_t *buffer)
     {
         char *p = text;
 
@@ -314,7 +320,8 @@ public:
                 {
                     m_class_tokens_found[i]++;
                     // Speicher den Index des gefundenen Tokens
-                    (*((token**)buffer))[i] = index;
+                    //printf("\t\twriting to: %p\n",&buffer[i]);
+                    ((token*)buffer)[i] = index; //*(laptop*->token**) -> token* [i] -> token
 
                     // p um die Länge des gefundenen Tokens weiterschieben
                     while (*p && *p!=whitespace)
@@ -439,45 +446,40 @@ public:
     }
 
 private:
-    inline void threaded_tokenization(in_buf_t *buffer, size_t buffer_size, std::function<int(in_buf_t*, token**,Tokenization_mngr* tkm)> tokenize_entry, size_t num_threads,out_buf_t** thread_buffers)
+    inline void threaded_tokenization(in_buf_t *buffer, size_t buffer_size, std::function<int(in_buf_t*, out_buf_t*,Tokenization_mngr* tkm)> tokenize_entry, size_t num_threads, out_buf_t** thread_buffers)
     {
-        size_t *offsets = new size_t[num_threads + 1];
-        
-        // 1. Bereiche grob aufteilen
-        size_t buffered_lines = buffer_size / num_threads;
-        offsets[num_threads] = buffer_size; // dont allow reads over the end of the file
-        for (size_t t = 0; t < num_threads; ++t)
-        {
-            offsets[t] = t * buffered_lines;
-            thread_buffers[t] = new out_buf_t[buffered_lines]; // allocated buffer per thread
-            
+        // Korrekte Blockaufteilung wie beim Zusammenfügen
+        size_t base_block = buffer_size / num_threads;
+        size_t remainder = buffer_size % num_threads;
+        size_t* offsets = new size_t[num_threads + 1];
+        size_t current = 0;
+        for (size_t t = 0; t < num_threads; ++t) {
+            offsets[t] = current;
+            size_t block_size = base_block + (t < remainder ? 1 : 0);
+            thread_buffers[t] = new out_buf_t[block_size];
+            current += block_size;
         }
+        offsets[num_threads] = buffer_size;
 
-        // 4. Threads starten
+        // Threads starten
         std::thread* threads = new std::thread[num_threads];
-        for (size_t t = 0; t < num_threads; ++t)
-        {
-            printf("Thread %zu: -> [%zu - %zu]\n", t, offsets[t], offsets[t + 1]);
+        for (size_t t = 0; t < num_threads; ++t) {
             size_t block_start = offsets[t];
             size_t block_end = offsets[t + 1];
             out_buf_t* buffer_ptr = thread_buffers[t];
-            size_t buffer_size = block_end - block_start;
+            //size_t buffer_size = block_end - block_start;
 
-            printf("starting thread %zu\n",t);
-            threads[t] = std::thread([=, &tokenize_entry]()
-            {
-                size_t bufferline = block_start;
-                size_t out_idx = 0;
-
-                for (int i = block_start; i < block_end; i++)
-                {
-                    //printf("buffer[%d]: %s",i,(token*)(buffer[i].data[0]));
-                    tokenize_entry(&buffer[i],(token**)(&buffer_ptr),this);
+            printf("Thread %zu: -> [%zu - %zu]\n", t, block_start, block_end);
+            threads[t] = std::thread([=, this, &tokenize_entry]() {
+                for (size_t i = block_start; i < block_end; ++i) {
+                    size_t out_idx = i - block_start;
+                    //printf("awaiting write at %p + %zu*(sizeof(out_Buf_t)) = %p\n", buffer_ptr, out_idx, &buffer_ptr[out_idx]);
+                    tokenize_entry(&buffer[i], &buffer_ptr[out_idx], this);
                 }
             });
         }
 
-        // 5. Warten auf alle Threads
+        // Warten auf alle Threads
         for (size_t t = 0; t < num_threads; ++t)
             threads[t].join();
 
@@ -513,9 +515,6 @@ private:
 
         return sym;
     }
-
-    // Hilfsfunktion zum Lesen einer Datei als String
-
 
     std::string generate_code(const std::string &func_name, const std::string &format)
     {
@@ -580,7 +579,7 @@ private:
         out << cpp_code;
         out.close();
 
-        std::string cmd = "g++ -std=c++17 -g -O3 -fPIC -shared -nostdlib -nodefaultlibs " + filename + " -o " + sofile + " -lc";
+        std::string cmd = "g++ -std=c++20 -g -O3 -fPIC -shared -nostdlib -nodefaultlibs " + filename + " -o " + sofile + " -lc";
         if (system(cmd.c_str()) != 0)
         {
             throw std::runtime_error("Compilerfehler bei: " + filename);

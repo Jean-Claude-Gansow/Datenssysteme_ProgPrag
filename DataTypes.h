@@ -1,14 +1,55 @@
+#include <type_traits>
+#include <cstdint>
+#include <cstring>
+#include <stdlib.h>
+#include <cstdio>
+
 #ifndef DUPLICATE_DETECTION_DATATYPES
 #define DUPLICATE_DETECTION_DATATYPES
 
-#include <cstdint>
-#include <cstring>
+
+
+// --- print_helper für C++20: if constexpr & requires ---
+template<typename T>
+void print_helper(const T& obj) {
+    if constexpr (requires { obj.println(); }) {
+        obj.println();
+    } else if constexpr (requires { obj.print(); }) {
+        obj.print();
+    } else if constexpr (std::is_pointer_v<T>) {
+        printf("%p", static_cast<const void*>(obj));
+    } else if constexpr (std::is_same_v<T, unsigned short>) {
+        printf("%hu", obj);
+    } else if constexpr (std::is_same_v<T, unsigned int>) {
+        printf("%u", obj);
+    } else if constexpr (std::is_same_v<T, int>) {
+        printf("%d", obj);
+    } else if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+        printf("%f", static_cast<double>(obj));
+    } else {
+        // nichts tun
+    }
+}
+
+
 
 template <typename t>
 struct dataSet
 {
     t* data;
     unsigned long size;
+    
+
+    void print() const
+    {
+        for(unsigned long i = 0; i < size; i++)
+        {
+            printf("[%lu] := ", i);
+            print_helper(data[i]);
+            printf("\n");
+        }
+    }
+    
     const t operator[](unsigned int index) const 
     {
         return data[index];
@@ -22,6 +63,17 @@ struct dataSet
 template <unsigned int N,typename t>
 struct tuple_t {
     t data[N];
+
+
+    void println() const
+    {
+        for(unsigned int i = 0; i < N; i++)
+        {
+            printf("[%u] := ", i);
+            print_helper(data[i]);
+            printf("\n");
+        }
+    }
 
     // Optional: Zugriffsfunktion
     t& operator[](unsigned int index) 
@@ -41,7 +93,7 @@ typedef tuple_t<2,uintptr_t> pair,match;
 typedef pair** block_t;
 typedef unsigned short token;
 
-typedef struct partitions_t
+typedef struct partition_t
 {
     pair* data; // Pointer auf die Daten der Partition
     unsigned int size; // Größe der Partition
@@ -120,8 +172,24 @@ struct laptop
 
     size_t id;
     char * description; // Pointer auf eine Zeichenkette, die die Beschreibung des Laptops enthält
-    
-    token operator [](const category idx) const
+
+    void print() const
+    {
+        printf("T.V. s: %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu", brand, model, rom, ram, cpu_brand, cpu_fam, cpu_series, gpu_brand, gpu_fam, gpu_series, display_resolution, display_size);
+    }
+
+    void println() const
+    {
+        printf("T.V. s: %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu\n",brand,model,rom,ram,cpu_brand,cpu_fam,cpu_series,gpu_brand,gpu_fam,gpu_series,display_resolution,display_size);
+    }
+
+    token &operator[](const category idx)
+    {
+        token *tokens = &brand;
+        return tokens[idx];
+    }
+
+    token operator[](const category idx) const
     {
         const token *tokens = &brand; // erstes Token-Feld
         return tokens[idx];
@@ -182,6 +250,22 @@ struct storage_drive
 
     size_t id;
     quintupel* descriptor;
+
+    void print() const
+    {
+        printf("T.V. s: %hu %hu %hu", brand, model, rom);
+    }
+
+    void println() const
+    {
+        printf("T.V. s: %hu %hu %hu\n", brand, model, rom);
+    }
+
+    token &operator[](const category idx)
+    {
+        token *tokens = &brand;
+        return tokens[idx];
+    }
 
     token operator[](const category idx) const
     {

@@ -6,18 +6,14 @@
 #include "Utillity.h"
 
 #ifndef COPY_STRING_FIELDS
-#define COPY_STRING_FIELDS 0  // 0 = Pointer merken, 1 = strdup
+#define COPY_STRING_FIELDS 1  // 0 = Pointer merken, 1 = strdup
 #endif
 
 // #define PRINT_FILE_OUTPUT 1  // definiert -> Ausgabe in Datei 
 
 // --- Abschnitt für %s (String-Feld) ---
-inline void parse_field_s(char*& p, uintptr_t* fields, int idx, char* line, FILE* outbuffer)
+inline void parse_field_s(char*& p, uintptr_t* fields, int idx, char* line)
 {
-    #ifdef PRINT_FILE_OUTPUT
-        fprintf(outbuffer, "[parser] s Feldstart %d: '%c' @ %ld\n", idx, *p, p - line);
-    #endif
-
     if (*p == ',' || *p == '\n' || *p == '\0' || *p == '\r') {
         fields[idx] = (uintptr_t)(COPY_STRING_FIELDS ? strdup("") : "");
         if (*p == ',') ++p;
@@ -33,15 +29,11 @@ inline void parse_field_s(char*& p, uintptr_t* fields, int idx, char* line, FILE
         p = end;
         if (trenn == ',') ++p;
     }
-
-    #ifdef PRINT_FILE_OUTPUT
-        fprintf(outbuffer, "[parser] Feldende %d: '%c' @ %ld\n\n", idx, *p, p - line);
-    #endif
 }
 
 
 // --- Abschnitt für %f (Double-Feld) ---
-inline void parse_field_f(char*& p, uintptr_t* fields, int idx, char* line, FILE* outbuffer) {
+inline void parse_field_f(char*& p, uintptr_t* fields, int idx, char* line) {
     if (*p == ',' || *p == '\n' || *p == '\0' || *p == '\r') {
         // Leeres Feld => 0.0
         double zero = 0.0;
@@ -64,11 +56,8 @@ inline void parse_field_f(char*& p, uintptr_t* fields, int idx, char* line, FILE
 
 
 // --- Abschnitt für %d (Integer-Feld) ---
-inline void parse_field_d(char*& p, uintptr_t* fields, int idx, char* line, FILE* outbuffer)
+inline void parse_field_d(char*& p, uintptr_t* fields, int idx, char* line)
 {
-     #ifdef PRINT_FILE_OUTPUT
-        fprintf(outbuffer, "[parser] s Feldstart %d: '%c' @ %ld\n", idx, *p, p - line);
-    #endif
     // Überspringe ggf. Leerzeichen
     if (*p == ',' || *p == '\n' || *p == '\0' || *p == '\r') {
         fields[idx] = 0;
@@ -83,18 +72,11 @@ inline void parse_field_d(char*& p, uintptr_t* fields, int idx, char* line, FILE
 
         if (*p == ',') ++p;
     }
-    #ifdef PRINT_FILE_OUTPUT
-        fprintf(outbuffer, "[parser] Feldende %d: '%c' @ %ld\n\n", idx, *p, p - line);
-    #endif
 }
 
 // --- Abschnitt für %_ (ignore) ---
-inline void parse_field_ignore(char*& p, char* line, FILE* outbuffer) 
+inline void parse_field_ignore(char*& p, char* line) 
 {
-    #ifdef PRINT_FILE_OUTPUT
-        fprintf(outbuffer, "[parser] Feldende %d: @ %ld\n\n", *p, p - line);
-    #endif
-
     if (*p == '"') {
         ++p;  // Startquote überspringen
         while (*p) {
@@ -114,20 +96,12 @@ inline void parse_field_ignore(char*& p, char* line, FILE* outbuffer)
     // Nach Feldende: , oder Zeilenende überspringen
     while (*p && *p != ',' && *p != '\n' && *p != '\r') ++p;
     if (*p == ',') ++p;
-
-    #ifdef PRINT_FILE_OUTPUT
-        fprintf(outbuffer, "- '%c' [%ld]\n", *p, p - line);
-    #endif
 }
 
 
 // --- Abschnitt für %V (Rest der Zeile als String) ---
-inline void parse_field_V(char*& p, uintptr_t* fields, int idx, char* line, FILE* outbuffer) {
-    
-    #ifdef PRINT_FILE_OUTPUT
-        fprintf(outbuffer, "[parser] V Feldstart %d: '%c' @ %ld\n", idx, *p, p - line);
-    #endif
-
+inline void parse_field_V(char*& p, uintptr_t* fields, int idx, char* line) 
+{
     if (*p == '\n' || *p == '\0' || *p == '\r') {
         fields[idx] = (uintptr_t)(COPY_STRING_FIELDS ? strdup("") : (char*)"");
         //fprintf(outbuffer, "[parser] Leeres V-Feld erkannt\n");
@@ -146,25 +120,19 @@ inline void parse_field_V(char*& p, uintptr_t* fields, int idx, char* line, FILE
         COPY_STRING_FIELDS ? strdup(start) : start
     );
     p = end + 1;  // weiter zum nächsten Feld oder '\0'
-
-    #ifdef PRINT_FILE_OUTPUT
-        fprintf(outbuffer, "[parser] V Feldende %d: '%c' @ %ld, Inhalt: '%s'\n",idx, *p, p - line, (char*)fields[idx]);
-    #endif
 }
 
 
 
 // --- Hauptfunktion ---
-extern "C" size_t parser_2(char* line, void* out) {
-    FILE* outbuffer = fopen("parser_2_out.txt", "a");
-    if (!outbuffer) outbuffer = stdout;
+extern "C" size_t parser_2(char* line, void* out) 
+{
     char* p = line;
     uintptr_t* fields = (uintptr_t*)out;
-    parse_field_d(p, fields, 0, line, outbuffer);
-    parse_field_d(p, fields, 1, line, outbuffer);
+    parse_field_d(p, fields, 0, line);
+    parse_field_d(p, fields, 1, line);
 
-    //printf("--:%s\n",line);
-    if (outbuffer && outbuffer != stdout) fclose(outbuffer);
-    printf("[parser_2] p-line: %ld, line: '%s'\n", p - line, line);
-    return p - line;
+    while (*p == '\r' || *p == '\n')
+    {++p;}
+return p - line;
 }
