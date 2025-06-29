@@ -1,0 +1,27 @@
+uhs i;uhsi
+uhs ii;uhsii
+uhs iii;uhsiii
+v10
+v30
+v2
+v3
+a1
+a2
+a3
+a5
+a7
+a8
+a9
+a10
+a11
+a20
+a30
+a46
+a50
+a70
+a87
+class 2;class2
+class 4;class4
+class 6;class6
+class 10;class10
+class1;class 1

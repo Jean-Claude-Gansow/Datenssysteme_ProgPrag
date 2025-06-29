@@ -1,0 +1,24 @@
+2mb
+4mb
+8mb
+16mb
+32mb
+64mb
+128mb
+256mb
+512mb
+1gb
+2gb
+4gb
+8gb
+16gb
+32gb
+64gb
+128gb
+256gb
+512gb
+1tb;1000gb;1 tb
+2tb;2000gb;2 tb
+4tb;4000gb;4 tb
+8tb;8000gb;8 tb
+16tb;16000gb;16 tb
