@@ -5,9 +5,9 @@ extern "C" size_t tokenizer_1_0 (quintupel *line, storage_drive *out, Tokenizati
 {
     
 	tkm->filter_tokens((char*)(line->data[0]), out);
-	tkm->filter_tokens((char*)(line->data[1]), out);
 	tkm->filter_tokens((char*)(line->data[2]), out);
 	tkm->filter_tokens((char*)(line->data[3]), out);
+	tkm->filter_tokens((char*)(line->data[4]), out);
 
     return 0;
 }

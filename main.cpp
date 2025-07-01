@@ -32,8 +32,8 @@ int main(int argc, char** argv)
 
     Tokenization_mngr<12, single_t, laptop> *m_Laptop_tokenization_mngr = new Tokenization_mngr<12, single_t, laptop>({"12","single_t","laptop"});
     Tokenization_mngr<4, quintupel, storage_drive> *m_Storage_tokenization_mngr = new Tokenization_mngr<4, quintupel, storage_drive>({"4","quintupel","storage_drive"});
-    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>();
-    Partitioning_mngr<quintupel,storage_drive,4> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,4>();
+    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>(1000);
+    Partitioning_mngr<quintupel,storage_drive,4> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,4>(1000);
     Matching_mngr<laptop>* m_matching_laptop_mngr = new Matching_mngr<laptop>();
     Matching_mngr<storage_drive> *m_matching_storage_mngr = new Matching_mngr<storage_drive>();
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
@@ -116,19 +116,19 @@ int main(int argc, char** argv)
     printf("time elapsed for tokenizing Datasets: %.2f s\n", elapsedParse / (float)CLOCKS_PER_SEC);
     printf("generating Partitions...\n");
 
-    dataSet<partition> *laptop_partitions = m_partitioning_laptop_mngr->create_partitions(*tokenized_laptops, m_Laptop_tokenization_mngr, laptop_partition_hierarchy);
-    dataSet<partition> *storage_partitions = m_partitioning_storage_mngr->create_partitions(*tokenized_storage, m_Storage_tokenization_mngr, storage_partition_hierarchy);
+    dataSet<partition> *laptop_partitions = m_partitioning_laptop_mngr->create_partitions(tokenized_laptops, m_Laptop_tokenization_mngr, laptop_partition_hierarchy);
+    dataSet<partition> *storage_partitions = m_partitioning_storage_mngr->create_partitions(tokenized_storage, m_Storage_tokenization_mngr, storage_partition_hierarchy);
 
-    print_partitions_field(*laptop_partitions,1);
-    print_partitions_field(*storage_partitions, 1);
+    print_partitions_field(*laptop_partitions,0);
+    print_partitions_field(*storage_partitions, 0);
 
     int elapsedBlock = clock() - start;
     printf("time elapsed for generating Blocks: %.2f s\n", elapsedBlock / (float)CLOCKS_PER_SEC);
 
     start = clock();
 
-    //match* matchesDS1 = m_matching_mngr->generateMatching(blocksDS1, figureOut, maxThreads);
-    //match* matchesDS2 = m_matching_mngr->generateMatching(blocksDS2, figureOut, maxThreads);
+    //match* matchesDS1 = m_matching_laptop_mngr->match_block(blocksDS1, figureOut, maxThreads);
+    //match* matchesDS2 = m_matching_storage_mngr->match_block(blocksDS2, figureOut, maxThreads);
 
     int elapsedMatch = clock() - start;
     printf("time elapsed for matching: %.2f s\n", elapsedMatch / (float)CLOCKS_PER_SEC);

@@ -37,7 +37,7 @@ template <typename t>
 struct dataSet
 {
     t* data;
-    unsigned long size;
+    size_t size;
     
 
     void print() const
@@ -96,7 +96,8 @@ typedef unsigned short token;
 typedef struct partition_t
 {
     pair* data; // Pointer auf die Daten der Partition
-    unsigned int size; // Größe der Partition
+    size_t size; // Größe der Partition
+    size_t capacity;
 
     pair& operator[](unsigned int index) 
     {

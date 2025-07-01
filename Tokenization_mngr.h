@@ -206,6 +206,8 @@ class Tokenization_mngr
     using TokenizerFunc = size_t (*)(in_buf_t *bufferEntry, out_buf_t* out, Tokenization_mngr *tkm);
 public:
     size_t m_class_tokens_found[N];
+    size_t m_num_class_tokens_found[N];
+
 public:
     Tokenization_mngr(std::vector<std::string> template_types)
     {
@@ -214,6 +216,9 @@ public:
         {
             this->template_type_str.push_back(s);
         }
+        
+        // Initialisiere das m_class_tokens_found Array mit Nullen
+        memset(m_class_tokens_found, 0, sizeof(m_class_tokens_found));
     }
 
     Tokenization_mngr(std::vector<std::string> template_types,const category priority[N])
@@ -223,6 +228,9 @@ public:
         {
             this->template_type_str.push_back(s);
         }
+        
+        // Initialisiere das m_class_tokens_found Array mit Nullen
+        memset(m_class_tokens_found, 0, sizeof(m_class_tokens_found));
     }
 
     // Token-Liste aus Datei laden (ein Token pro ; pro Zeile)
@@ -230,7 +238,8 @@ public:
     {
         printf("importing file: %s\n", filename.c_str());
         size_t ret = classes[tk].fimport_token(filename.c_str());
-        this->m_class_tokens_found[tk] += ret;
+        this->m_class_tokens_found[tk] = ret > 0 ? ret - 1 : 0;
+        printf("found %zu unique tokens for klass %d\n",this->m_class_tokens_found[tk],tk);
         classes[tk].print();
         return true;     
     }
@@ -318,7 +327,7 @@ public:
                 token index = contains(p, static_cast<category>(i));
                 if (index > 0)
                 {
-                    m_class_tokens_found[i]++;
+                    m_num_class_tokens_found[i]++; // 
                     // Speicher den Index des gefundenen Tokens
                     //printf("\t\twriting to: %p\n",&buffer[i]);
                     ((token*)buffer)[i] = index; //*(laptop*->token**) -> token* [i] -> token
@@ -358,7 +367,7 @@ public:
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 96–103
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 104–111
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 112–119
-            &&loop, &&loop, &&loop, &&loop, &&loop_whitespace, &&loop, &&loop, &&loop, // 120–127
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 120–127
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 0–7
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 8–15
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 16–23

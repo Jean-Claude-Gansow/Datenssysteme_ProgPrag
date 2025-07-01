@@ -131,10 +131,10 @@ extern "C" size_t parser_1(char* line, void* out)
     uintptr_t* fields = (uintptr_t*)out;
     parse_field_ignore(p, line);
     parse_field_s(p, fields, 0, line);
-    parse_field_ignore(p, line);
-    parse_field_s(p, fields, 1, line);
+    parse_field_f(p, fields, 1, line);
     parse_field_s(p, fields, 2, line);
-    parse_field_V(p, fields, 3, line);
+    parse_field_s(p, fields, 3, line);
+    parse_field_V(p, fields, 4, line);
 
     while (*p == '\r' || *p == '\n')
     {++p;}
