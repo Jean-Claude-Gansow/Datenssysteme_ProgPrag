@@ -19,9 +19,9 @@ public:
     void match_blocker_intern(partition* part, size_t start, size_t end, matching* findingsBuffer)
     {
         // Jump-Table für die verschiedenen Ergebnisse des == Operators (0=Match, 1=No Match, 2=Fallback)
-        static void* jumpTable[3] =  
+        static void *jumpTable[3] =
         {
-            &&ismatch, &&nomatch, &&fallback
+            &&nomatch, &&ismatch, &&fallback
         };
 
         // Zähler für die gefundenen Matches

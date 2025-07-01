@@ -154,8 +154,9 @@ int main(int argc, char** argv)
     //printf("Evaluation of Duplicate Detection within DataSet2: %f\n", DS2EvaluationScore);
 
     // Aufräumen - Speicher freigeben
-    if (matchesDS1 && matchesDS1->data) free(matchesDS1->data);
-    if (matchesDS2 && matchesDS2->data) free(matchesDS2->data);
+    if (matchesDS1 && matchesDS1->data) delete matchesDS1->data;
+    
+    if (matchesDS2 && matchesDS2->data) delete matchesDS2->data;
     delete matchesDS1;
     delete matchesDS2;
 

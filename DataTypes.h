@@ -184,6 +184,18 @@ struct laptop
         printf("T.V. s: %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu\n",brand,model,rom,ram,cpu_brand,cpu_fam,cpu_series,gpu_brand,gpu_fam,gpu_series,display_resolution,display_size);
     }
 
+    const token &operator[](char idx) const
+    {
+        const token *tokens = &brand;
+        return tokens[idx];
+    }
+
+    token &operator[](const int idx)
+    {
+        token *tokens = &brand;
+        return tokens[idx];
+    }
+
     token &operator[](const category idx)
     {
         token *tokens = &brand;
@@ -196,17 +208,60 @@ struct laptop
         return tokens[idx];
     }
 
-    bool operator == (const laptop& other) const 
+    int operator == (const laptop& other) const
     {
-        //0 == ismatch
-        //1 == notmatch
-        //3 usefallback if wanted
+        //0 == nomatch
+        //1 == ismatch
+        //2 == use fallback if wanted
+        const void* jumptable[] = {&&compFalse,&&compTrue};
+        const void *jumptableRET[] = {
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&foundIdentical,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&useFallBack
+        };
+        char c = assembler_brand;
+        char equal = 0;
+        const char required = 3;
+        const char max = 5;
+        
+        checkComp:
+        if(!(*this)[c] || !other[c])
+        {
+            goto notComparable;
+        }
+        goto *jumptable[(*this)[c] == other[c]]; //returns 0 or 1, 0 should be false, 1 should be true
+
+        compTrue:
+        ++equal;
+        ++c;
+        goto *jumptableRET[equal];
+        
+        compFalse:
+        return 0; //0 == not identical, found information discarding equality
+        
+        notComparable:
+        ++c;
+        goto *jumptableRET[equal];
+
+        useFallBack:
+        return 2;
+
+        foundIdentical:
         return 1;
     }
 
     double operator | (const laptop& other) const  //implementiere eine Vergleichsfunktion basierend auf djakar
     {
-        void* jumpTable1[128] = {};
+        /*void* jumpTable1[128] = {};
         void *jumpTable2[128] = {};
         char alphabetThis[127];
         char alphabetOther[127];
@@ -236,7 +291,8 @@ struct laptop
         //{
             
         //} 
-        return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
+        return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten*/
+        return 1.0; //noch nicht implemenmtiert, beraten was die beste methode ist, ich schlage 2er-tupel jaccar vor, da es sehr effizent umsetzbar ist
     }
 }; 
 
@@ -290,7 +346,7 @@ struct storage_drive
     double operator|(const storage_drive &other) const // implementiere eine Vergleichsfunktion basieren auf einer anderen Metrik als dem Direkten tokenvergleich.
     {
 
-        return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
+        return 1.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
     }
 };
 
