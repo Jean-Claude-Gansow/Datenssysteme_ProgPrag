@@ -113,7 +113,7 @@ typedef struct partition_t
 typedef struct matching_t
 {
     match* matches;
-    unsigned int size;
+    size_t size;
 
     match& operator[](unsigned int index) 
     {
@@ -198,7 +198,10 @@ struct laptop
 
     bool operator == (const laptop& other) const 
     {
-        return (*this| other) == 1.0;
+        //0 == ismatch
+        //1 == notmatch
+        //3 usefallback if wanted
+        return 1;
     }
 
     double operator | (const laptop& other) const  //implementiere eine Vergleichsfunktion basierend auf djakar
@@ -229,10 +232,10 @@ struct laptop
         //hier methode zum ähnlichkeitsindex basierend auf buchstabencount nutzen (experimentell, weitere operatoren definieren)
         
         //alphabet[32] = 0;
-        for(char* c1 = this->description,*c2 = other.description;;)
-        {
+        //for(char* c1 = this->description,*c2 = other.description;;)
+        //{
             
-        } 
+        //} 
         return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
     }
 }; 
@@ -274,12 +277,17 @@ struct storage_drive
         return tokens[idx];
     }
 
-    bool operator==(const laptop &other) const
+    bool operator==(storage_drive &other)
     {
         return (*this | other) == 1.0;
     }
 
-    double operator|(const laptop &other) const // implementiere eine Vergleichsfunktion basieren auf einer anderen Metrik als dem Direkten tokenvergleich.
+    const bool operator==(const storage_drive &other) const
+    {
+        return (*this | other) == 1.0;
+    }
+
+    double operator|(const storage_drive &other) const // implementiere eine Vergleichsfunktion basieren auf einer anderen Metrik als dem Direkten tokenvergleich.
     {
 
         return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten

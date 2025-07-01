@@ -127,8 +127,12 @@ int main(int argc, char** argv)
 
     start = clock();
 
-    //match* matchesDS1 = m_matching_laptop_mngr->match_block(blocksDS1, figureOut, maxThreads);
-    //match* matchesDS2 = m_matching_storage_mngr->match_block(blocksDS2, figureOut, maxThreads);
+    printf("Starting duplicate detection within partitions...\n");
+    dataSet<matching>* matchesDS1 = m_matching_laptop_mngr->identify_matches(laptop_partitions, maxThreads);
+    dataSet<matching>* matchesDS2 = m_matching_storage_mngr->identify_matches(storage_partitions, maxThreads);
+    
+    printf("Found %zu potential duplicates in laptop dataset\n", matchesDS1->size);
+    printf("Found %zu potential duplicates in storage dataset\n", matchesDS2->size);
 
     int elapsedMatch = clock() - start;
     printf("time elapsed for matching: %.2f s\n", elapsedMatch / (float)CLOCKS_PER_SEC);
@@ -148,6 +152,12 @@ int main(int argc, char** argv)
 
     //printf("Evaluation of Duplicate Detection within DataSet1: %f\n", DS1EvaluationScore);
     //printf("Evaluation of Duplicate Detection within DataSet2: %f\n", DS2EvaluationScore);
+
+    // Aufräumen - Speicher freigeben
+    if (matchesDS1 && matchesDS1->data) free(matchesDS1->data);
+    if (matchesDS2 && matchesDS2->data) free(matchesDS2->data);
+    delete matchesDS1;
+    delete matchesDS2;
 
     return 0;
 }
