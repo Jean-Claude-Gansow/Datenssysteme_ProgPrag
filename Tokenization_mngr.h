@@ -155,17 +155,6 @@ public:
             
             // Calculate index and ensure it's within bounds
             int idx = c - ALPHABET_ANCHOR;
-            if(idx < 0 || idx >= ALPHABET_SIZE) {
-                printf("==============================================================================================================================================================================\n\nchecking char: [%c] (ASCII: %d)\n", c, c);
-                // Use index for whitespace character as fallback
-                c = whitespace;
-                idx = c - ALPHABET_ANCHOR;
-                // Double-check to ensure this index is valid
-                if (idx < 0 || idx >= ALPHABET_SIZE) {
-                    // If still invalid, we can't proceed with this character
-                    return token_result();
-                }
-            }
             
             node = node->child[idx];
             
@@ -411,7 +400,6 @@ public:
             bool matched = false;
             for (int i = 0; i < N; ++i)
             {
-                printf("Searching for token in class %d: %s\n", i, text);
                 token_node::token_result result = classes[i].get_possible_index(p);
                 if (result.index > 0)
                 {
@@ -427,8 +415,8 @@ public:
                         if (targetKat < N && ((token*)buffer)[targetKat] == 0)
                         {
                             ((token*)buffer)[targetKat] = result.rueckschlussToken;
-                            printf("Rückschluss angewendet: Kategorie %d Token %hu -> Kategorie %d\n", 
-                                  i, result.index, static_cast<int>(targetKat));
+                            printf("Rückschluss angewendet: Kategorie %d Token %hu -> Kategorie %d Token %hu\n", 
+                                  i, result.index, static_cast<int>(targetKat),result.rueckschlussToken);
                         }
                     }
 

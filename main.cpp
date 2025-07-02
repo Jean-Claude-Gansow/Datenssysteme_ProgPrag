@@ -122,9 +122,10 @@ int main(int argc, char** argv)
 
     dataSet<partition> *laptop_partitions = m_partitioning_laptop_mngr->create_partitions(tokenized_laptops, m_Laptop_tokenization_mngr, laptop_partition_hierarchy);
     dataSet<partition> *storage_partitions = m_partitioning_storage_mngr->create_partitions(tokenized_storage, m_Storage_tokenization_mngr, storage_partition_hierarchy);
-
-    print_partitions_field(*laptop_partitions,0);
-    print_partitions_field(*storage_partitions, 0);
+    printf("Generated %zu partitions for laptops\n", laptop_partitions->size);
+    printf("Generated %zu partitions for storage drives\n", storage_partitions->size);
+    //print_partitions_field(*laptop_partitions,0);
+    //print_partitions_field(*storage_partitions, 0);
 
     int elapsedBlock = clock() - start;
     printf("time elapsed for generating Blocks: %.2f s\n", elapsedBlock / (float)CLOCKS_PER_SEC);
