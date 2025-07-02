@@ -28,11 +28,10 @@
 //scenario: Wir finden einen token mit a und betreten den Baum bei accessoires
 //scenario: der zweite buchstabe ist ein c, also bleiben wir im tokentree bei accessoires
 //scenario: der dritte buchstabe ist ein c, also bleiben wir im tokentree
-//scenario: der vierte Buchstabe ist ein u, springe in der Liste zum index u - 'a' und springe somit in den Baum von accueil
-//scenario - Fall 1: das Wort ist accueil, also ist es ein Token
+//scenario: der vierte Buchstabe ist ein u, springe in der Liste zum index u - 'a' und springe somit in den Subbaum für accueil
+//scenario - Fall 1: das Wort ist accueil, also wandern wir im baum bis zum ende und zählen ein Token
 //scenario - Fall 2: das Wort ist ein nicht im tokenizer bekanntes wort, also wird es nicht als Token erkannt
 
-//rework, try to use a tree structure for the tokens, so that we can use a lookup table to find the next letter and then search for the next token in the children of the current token
 class token_node
 {
 public:
@@ -41,17 +40,21 @@ public:
 public:
     token_node* child[ALPHABET_SIZE];  // 36 mögliche Buchstaben
     size_t id_index;    // Dieses Token endet hier
-    token_node() : id_index(0)
+    token rueckschlussindex;   // Rückschlussindex als Token-Typ
+    token_class rueckschlussKategorie; // Zielkategorie für den Rückschluss
+    
+    token_node() : id_index(0), rueckschlussindex(0), rueckschlussKategorie(static_cast<token_class>(-1))
     {
         memset(this->child,0,sizeof(this->child));
     }
+    
     ~token_node()
     {
         for (int i = 0; i < ALPHABET_SIZE; ++i)
             delete child[i];
     }
 
-    size_t fimport_token(const char *filename)
+    size_t fimport_token(const char *filename, token_class rueckschlussKat = static_cast<token_class>(-1))
     {
         void* jumpTable[128] = {
             &&eof, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,     // 0–7
@@ -69,7 +72,7 @@ public:
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,     // 96–103
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,     // 104–111
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,     // 112–119
-            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop      // 120–127
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,     // 120–127
         };
 
         File file(filename,true);
@@ -78,58 +81,105 @@ public:
         char* tokenbegin = p;
         size_t lineIndex = 1; //start at 1 for our id_index in the nodes is 0 if not a final node
         
+        // Prüfe, ob es eine globale Rückschlussregel gibt (erste Zeile mit "->")
+        token globalRueckschluss = 0;  // Der Rückschluss wird als Token gespeichert
+        
+        // Prüfe, ob die Datei mit "->" beginnt
+        if (p[0] == '-' && p[1] == '>') {
+            p += 2; // Überspringe "->"
+            
+            // Temporärer Speicher für das Rückschlusswort
+            char* start = p;
+            while (*p && *p != '\n') ++p;
+            
+            // Das Wort extrahieren
+            if (p > start) {
+                size_t wordLen = p - start;
+                char* tempWord = new char[wordLen + 1];
+                strncpy(tempWord, start, wordLen);
+                tempWord[wordLen] = '\0';
+                
+                // Umwandeln in einen Token, wenn eine Rückschlusskategorie angegeben wurde
+                if (rueckschlussKat != static_cast<token_class>(-1)) {
+                    globalRueckschluss = find_token_for_word(tempWord);
+                    printf("Gefunden: Globaler Rückschlusstoken '%s' (Token %hu) für alle Token in dieser Datei\n", 
+                           tempWord, globalRueckschluss);
+                    
+                    // Wenn der Token nicht gefunden wurde, warnen
+                    if (globalRueckschluss == 0) {
+                        printf("WARNUNG: Rückschlusstoken '%s' wurde nicht gefunden!\n", tempWord);
+                    }
+                }
+                
+                delete[] tempWord;
+            }
+            
+            // Zeilenumbruch überspringen
+            if (*p == '\n') ++p;
+            tokenbegin = p;
+        }
+        
         loop: //rewrite numeric characters to match map indentation
         *p = lut[*p]; //rework token
         goto *jumpTable[*(++p)]; //goto the scenario, chosen by that character found
 
         semFound: //found a semicolon, inserting from last token
         *p = 0; //mark end of string
-        insert(tokenbegin,lineIndex,(p-tokenbegin)); //insert, until current position, at current index, no incement, since we stay at this line
+        insert(tokenbegin, lineIndex, (p-tokenbegin), globalRueckschluss, rueckschlussKat); //insert, with global back reference
         ++p; //move read to next possible character
         tokenbegin = p;
         goto *jumpTable[*(p)]; //jump to whatever we find, should be the first char of the next token
 
         spaceFound:
         *p = 0;             // mark end of string
-        insert(tokenbegin, lineIndex++,(p - tokenbegin)-1); // insert, until current position
+        insert(tokenbegin, lineIndex++, (p - tokenbegin)-1, globalRueckschluss, rueckschlussKat); // insert, with global back reference
         ++p;                // move read to next possible character
         tokenbegin = p;
         goto *jumpTable[*(p)]; // jump to whatever we find, should be the first char of the next token
 
         eof:
         *p = 0;                                          // mark end of string
-        insert(tokenbegin, lineIndex++, (p - tokenbegin)); // insert, until current position
+        insert(tokenbegin, lineIndex++, (p - tokenbegin), globalRueckschluss, rueckschlussKat); // insert, with global back reference
         return lineIndex; // return the number of tokens with different meaning
     }
 
-    token get_possible_index(char *p) const
+    // Struktur zum Zurückgeben von Token-Index, Rückschluss-Token und Rückschluss-Kategorie
+    struct token_result {
+        token index;                // Index des gefundenen Tokens
+        token rueckschlussToken;    // Token-Index für Rückschluss
+        token_class rueckschlussKat; // Kategorie für Rückschluss
+        
+        token_result(token idx = 0, token rueck = 0, token_class rueckKat = static_cast<token_class>(-1)) 
+            : index(idx), rueckschlussToken(rueck), rueckschlussKat(rueckKat) {}
+        
+        // Implizite Konvertierung zu token für Abwärtskompatibilität
+        operator token() const { return index; }
+    };
+    
+    token_result get_possible_index(char *p) const
     {
-        void* jumpTable[ALPHABET_SIZE] = {};
-
         const token_node *node = this;
         char *current = p;
 
         while (*current)
         {
             unsigned char c = *current;
-            //if (c < ALPHABET_ANCHOR) //sollte nicht passieren können
-                //return 0; // Optional: Zeichen außerhalb des gültigen Bereichs
             if(c < ALPHABET_ANCHOR || c > 127){*current = whitespace;c = *current;}
-            //printf("jumping to childnode: %c\n",c);
+            
             node = node->child[c - ALPHABET_ANCHOR];
             
             if (node == nullptr)
             {
-                return 0;
+                return token_result();
             }
             else if (node->id_index > 0)
             {
-                return node->id_index;
+                return token_result(node->id_index, node->rueckschlussindex, node->rueckschlussKategorie);
             }
             ++current;
         }
 
-        return 0;
+        return token_result();
     }
 
     void print() const {
@@ -179,20 +229,96 @@ public:
     }
 
 private:
-    void insert(const char* word,size_t index,size_t len)
+    // Hilfsfunktion, um einen Token-Index für ein Wort zu bekommen (für globale Rückschlüsse)
+    token find_token_for_word(const char *p) const
     {
-        token_node* node = this;
-        //std::string compatible_word = make_token_compatible(word); //rewrite, for not needed from loading from file, write version with this for direct use from insert 
-        for (int i = 0; i < len; i++)
+        const token_node *node = this;
+        const char *current = p;
+
+        while (*current)
         {
-            int idx = word[i] - ALPHABET_ANCHOR;
-            if (node->child[idx] == nullptr)
+            unsigned char c = *current;
+            if(c < ALPHABET_ANCHOR || c > 127){
+                return 0; // Ungültiges Zeichen im Rückschlusswort
+            }
+            
+            node = node->child[c - ALPHABET_ANCHOR];
+            
+            if (node == nullptr)
             {
+                return 0;
+            }
+            else if (node->id_index > 0)
+            {
+                return node->id_index;
+            }
+            ++current;
+        }
+
+        return 0;
+    }
+
+    void insert(const char* word, size_t index, size_t len, token globalRueckschluss = 0, token_class rueckschlussKat = static_cast<token_class>(-1))
+    {
+        // Prüfe auf lokale Rückschlussregel im Token selbst (Format: "wort->X")
+        token localRueckschluss = globalRueckschluss;
+        token_class localRueckschlussKat = rueckschlussKat;
+        char* arrowPos = nullptr;
+        
+        // Temporärer Buffer für Modifikationen
+        char* tempWord = new char[len + 1];
+        strncpy(tempWord, word, len);
+        tempWord[len] = '\0';
+        
+        // Prüfe, ob das Wort ein "->" enthält für lokale Überschreibungen
+        for (size_t i = 0; i < len - 1; i++) {
+            if (tempWord[i] == '-' && tempWord[i+1] == '>') {
+                arrowPos = tempWord + i;
+                break;
+            }
+        }
+        
+        // Wenn ein lokales "->" gefunden wurde
+        if (arrowPos) {
+            *arrowPos = '\0'; // Beende das Wort beim "->"
+            len = arrowPos - tempWord; // Neue Länge des Tokens
+            
+            // Extrahiere das Rückschlusswort
+            char* tokenStart = arrowPos + 2;
+            if (*tokenStart) {
+                // Suche das Rückschlusswort im entsprechenden Baum
+                if (rueckschlussKat != static_cast<token_class>(-1)) {
+                    // Hier müsste eigentlich über einen anderen Tokenizer gesucht werden
+                    // Vereinfacht nehmen wir an, dass der Token bekannt sein muss
+                    token tempToken = find_token_for_word(tokenStart);
+                    if (tempToken > 0) {
+                        localRueckschluss = tempToken;
+                        printf("Lokaler Rückschluss '%s' (Token %hu) für Token '%s'\n", 
+                               tokenStart, localRueckschluss, tempWord);
+                    }
+                }
+            }
+        }
+        
+        // Normale Token-Einfügung
+        token_node* node = this;
+        for (size_t i = 0; i < len; i++) {
+            int idx = tempWord[i] - ALPHABET_ANCHOR;
+            if (node->child[idx] == nullptr) {
                 node->child[idx] = new token_node();
             }
-            node = node->child[idx];//walk down the tree
+            node = node->child[idx]; //walk down the tree
         }
-        node->id_index = index;//assign valid index
+        
+        node->id_index = index; //assign valid index
+        
+        // Wenn ein Rückschluss definiert wurde, speichere ihn
+        if (localRueckschluss > 0 && localRueckschlussKat != static_cast<token_class>(-1)) {
+            node->rueckschlussindex = localRueckschluss;
+            node->rueckschlussKategorie = localRueckschlussKat;
+        }
+        
+        delete[] tempWord;
     }
 
 };
@@ -234,12 +360,13 @@ public:
     }
 
     // Token-Liste aus Datei laden (ein Token pro ; pro Zeile)
-    bool loadTokenList(const std::string &filename, token_class tk)
+    bool loadTokenList(const std::string &filename, token_class tk, token_class rueckschlussKategorie = static_cast<token_class>(-1))
     {
         printf("importing file: %s\n", filename.c_str());
-        size_t ret = classes[tk].fimport_token(filename.c_str());
+        printf("Rückschlusskategorie: %d\n", static_cast<int>(rueckschlussKategorie));
+        size_t ret = classes[tk].fimport_token(filename.c_str(), rueckschlussKategorie);
         this->m_class_tokens_found[tk] = ret > 0 ? ret - 1 : 0;
-        printf("found %zu unique tokens for klass %d\n",this->m_class_tokens_found[tk],tk);
+        printf("found %zu unique tokens for klass %d\n", this->m_class_tokens_found[tk], tk);
         classes[tk].print();
         return true;     
     }
@@ -249,10 +376,10 @@ public:
         classes[tk].insert(token);
     }
 
-    // Prüfen, ob ein Token enthalten ist
-    token contains(char* token,token_class tk) const
+    // Prüfen, ob ein Token enthalten ist (gibt nur den Index zurück)
+    token contains(char* token, token_class tk) const
     {
-        return classes[tk].get_possible_index(token);
+        return classes[tk].get_possible_index(token).index;
     }
 
     dataSet<out_buf_t>* tokenize_multithreaded(dataSet<in_buf_t>* ds,const char* format,size_t num_threads)
@@ -324,13 +451,25 @@ public:
             bool matched = false;
             for (int i = 0; i < N; ++i)
             {
-                token index = contains(p, static_cast<category>(i));
-                if (index > 0)
+                token_node::token_result result = classes[i].get_possible_index(p);
+                if (result.index > 0)
                 {
-                    m_num_class_tokens_found[i]++; // 
+                    m_num_class_tokens_found[i]++; 
                     // Speicher den Index des gefundenen Tokens
-                    //printf("\t\twriting to: %p\n",&buffer[i]);
-                    ((token*)buffer)[i] = index; //*(laptop*->token**) -> token* [i] -> token
+                    ((token*)buffer)[i] = result.index;
+
+                    // Wenn ein Rückschluss definiert ist und die Zielkategorie noch leer ist
+                    if (result.rueckschlussToken > 0 && result.rueckschlussKat != static_cast<token_class>(-1))
+                    {
+                        token_class targetKat = result.rueckschlussKat;
+                        // Nur anwenden, wenn die Zielkategorie im gültigen Bereich liegt und noch nicht gesetzt ist
+                        if (targetKat < N && ((token*)buffer)[targetKat] == 0)
+                        {
+                            ((token*)buffer)[targetKat] = result.rueckschlussToken;
+                            printf("Rückschluss angewendet: Kategorie %d Token %hu -> Kategorie %d\n", 
+                                  i, result.index, static_cast<int>(targetKat));
+                        }
+                    }
 
                     // p um die Länge des gefundenen Tokens weiterschieben
                     while (*p && *p!=whitespace)
