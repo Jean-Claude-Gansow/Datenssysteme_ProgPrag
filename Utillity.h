@@ -99,55 +99,54 @@ inline std::string read_file(const std::string &filename)
 
 inline char* find_and_clean_csv(char* p) {
     char* start = p;
-    //fprintf(stderr, "[csv] Feldstart (\") @ %p\n", (void*)p);
-
+    
     if (*p == '"') {
         // Quoted field
-        char* dst = p;
+        char* dst = p;  // Start writing at beginning of field
         ++p;  // Skip leading quote
-        //fprintf(stderr, "[csv] Start quoted @ %p\n", (void*)p);
-
-        while (*p) 
-        {
-            if (*p == '"') 
-            {
-                if (*(p + 1) == '"') 
-                {
-                    // Escaped quote ("") //nachsehen was das macht, überarbeiten, funktionier verm. nicht korrekt
+        
+        // Process the quoted content
+        while (*p) {
+            if (*p == '"') {
+                if (*(p + 1) == '"') {
+                    // Properly handle escaped quotes ("") by converting to Escape character
                     *dst++ = Escape;
-                    //fprintf(stderr, "[csv] Escaped quote \"\" gefunden @ %p\n", (void*)p);
-                    p += 2;
+                    p += 2;  // Skip both quote characters
                 } else {
                     // End of quoted field
-                    ++p;
-                    //fprintf(stderr, "[csv] Ende quoted @ %p\n", (void*)p);
+                    *dst = '\0';  // Properly null-terminate the output string
+                    ++p;  // Move past the closing quote
                     break;
                 }
             } else {
+                // Process normal character using the lookup table
                 *dst++ = lut[(unsigned char)*p];
-                //fprintf(stderr, "[csv] Quoted-Zeichen: '%c' → '%c' @ %p\n", *p, *(dst - 1), (void*)p);
                 ++p;
             }
         }
-
-        // Skip trailing whitespace or unexpected characters until comma or newline
+        
+        // Skip trailing whitespace or unexpected characters until delimiter
         while (*p && *p != ',' && *p != '\n' && *p != '\r') {
-            //fprintf(stderr, "[csv] Überspringe char nach quoted Feld: '%c' @ %p\n", *p, (void*)p);
             ++p;
         }
-
-        //fprintf(stderr, "[csv] Feldende (\") %p -- %zu\n", (void*)p, (size_t)(p-start));
+        
         return p;
     } else {
         // Unquoted field
         char* dst = p;
+        
+        // Process all characters until delimiter
         while (*p && *p != ',' && *p != '\n' && *p != '\r') {
+            // In-place transformation using lookup table
             *dst++ = lut[(unsigned char)*p];
-            //fprintf(stderr, "[csv] Plain-Zeichen: '%c' → '%c' @ %p\n", *p, *(dst - 1), (void*)p);
             ++p;
         }
-
-        //fprintf(stderr, "[csv] Feldende (plain) bei: '%c' @ %p\n", *p, (void*)p);
+        
+        // Ensure proper null-termination if content was modified
+        if (dst < p) {
+            *dst = '\0';
+        }
+        
         return p;
     }
 }

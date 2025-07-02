@@ -12,6 +12,7 @@
 static unsigned char Escape = 123;
 static unsigned char dotToComma = 125;
 static unsigned char whitespace = 124;
+static const char inference_prefix[2] = {'-', '-'};
 static const unsigned char lut[256] =
     { // 0-47 (20er zeilen)
         whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace, whitespace,

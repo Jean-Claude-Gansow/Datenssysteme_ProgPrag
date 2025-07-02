@@ -64,8 +64,12 @@ int main(int argc, char** argv)
     //TODO: Listen zuusammenführen -> Klassenindices können erst dann korrekt gebaut werden.
     m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_marken.tokenz",assembler_brand); //laptop brand
     m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_modelle.tokenz", assembler_modell); //laptop modell
-    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_marken.tokenz", cpu_brand); //cpu brand
-    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle.tokenz",cpu_fam); //cpu familly (i3,i5,i7...)
+
+    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_marken.tokenz", cpu_brand); //cpu brand ++ inference tokens for cpu modells
+    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle_amd.tokenz",cpu_fam,cpu_brand); //cpu familly (i3,i5,i7...)
+    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle_intel.tokenz",cpu_fam,cpu_brand); //cpu familly (i3,i5,i7...)
+    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle_ibm.tokenz",cpu_fam,cpu_brand); //cpu familly (i3,i5,i7...)
+    m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle_qualcomm.tokenz",cpu_fam,cpu_brand); //cpu familly (i3,i5,i7...)
     //m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_series.tokenz", cpu_series); //cpu series (10400kf,14100K...)
     m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_marken.tokenz", gpu_brand);//gpu brand 
     //m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_modelle.tokenz", gpu_fam);// gpu familly (gt,gtx,rtx,radeon ...)
@@ -74,8 +78,8 @@ int main(int argc, char** argv)
     m_Laptop_tokenization_mngr->loadTokenList("../data/rom_size.tokenz",rom_capacity);
 
     m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_marken.tokenz",assembler_brand);
-    //m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_modelle.tokenz", assembler_brand);
-    m_Storage_tokenization_mngr->loadTokenList("../data/ram_size.tokenz",rom_capacity);
+    m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_modelle.tokenz", assembler_modell);
+    m_Storage_tokenization_mngr->loadTokenList("../data/rom_size_festplatten.tokenz",rom_capacity);
 
     int start = clock();
 
