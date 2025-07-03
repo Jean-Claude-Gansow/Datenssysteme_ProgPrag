@@ -3,7 +3,14 @@
 #include <thread>
 #include <time.h>
 
+// Uncomment one of these to enable different debug levels
+// Limit_DEBUG_OUTPUT ist in debug_utils.h definiert
+#define DEBUG_LEVEL 1  // Basic debugging (matching & partitioning only)
+// #define DEBUG_LEVEL 2  // Detailed debugging (+ tokenization & detailed matching)
+// #define DEBUG_LEVEL 3  // Full debugging (very verbose, + memory & full matching)
+
 #include "constants.h"
+#include "debug_utils.h"  // Include debugging utilities first
 #include "Evaluation_mngr.h"
 #include "partitioning_mngr.h"
 #include "Matching_mngr.h"
@@ -14,14 +21,19 @@
 
 std::string files[] = 
 {
-    "../data/TZ1.csv",
-    "../data/TZ2.csv",
+    "../data/Z1.csv",
+    "../data/Z2.csv",
     "../data/ZY1.csv",
     "../data/ZY2.csv"
 };
 
+// Die Funktion ist jetzt in debug_utils.h definiert
+
 int main(int argc, char** argv)
 {   
+    // Print debug configuration information
+    print_debug_configuration();
+    
     char test[3] = "\"\n";
     printf("%hu\n",(unsigned short)((*test << 8) | *(test+1)));
 
@@ -80,6 +92,7 @@ int main(int argc, char** argv)
     m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_marken.tokenz",assembler_brand);
     m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_modelle.tokenz", assembler_modell);
     m_Storage_tokenization_mngr->loadTokenList("../data/rom_size_festplatten.tokenz",rom_capacity);
+    m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_schnittstellen.tokenz")
 
     int start = clock();
 
@@ -124,6 +137,23 @@ int main(int argc, char** argv)
     dataSet<partition> *storage_partitions = m_partitioning_storage_mngr->create_partitions(tokenized_storage, m_Storage_tokenization_mngr, storage_partition_hierarchy);
     printf("Generated %zu partitions for laptops\n", laptop_partitions->size);
     printf("Generated %zu partitions for storage drives\n", storage_partitions->size);
+    
+    // Print partition sizes for debugging
+    printf("\nLaptop partition sizes:\n");
+    size_t total_elements = 0;
+    for (size_t i = 0; i < laptop_partitions->size; i++) {
+        printf("Partition %zu: %zu elements\n", i, laptop_partitions->data[i].size);
+        total_elements += laptop_partitions->data[i].size;
+    }
+    printf("Total elements across all laptop partitions: %zu\n\n", total_elements);
+    
+    printf("\nStorage partition sizes:\n");
+    total_elements = 0;
+    for (size_t i = 0; i < storage_partitions->size; i++) {
+        printf("Partition %zu: %zu elements\n", i, storage_partitions->data[i].size);
+        total_elements += storage_partitions->data[i].size;
+    }
+    printf("Total elements across all storage partitions: %zu\n\n", total_elements);
     //print_partitions_field(*laptop_partitions,0);
     //print_partitions_field(*storage_partitions, 0);
 
@@ -133,11 +163,32 @@ int main(int argc, char** argv)
     start = clock();
 
     printf("Starting duplicate detection within partitions...\n");
+    // Use simpler matching approach for better debugging
     dataSet<matching>* matchesDS1 = m_matching_laptop_mngr->identify_matches(laptop_partitions, maxThreads);
-    dataSet<matching>* matchesDS2 = m_matching_storage_mngr->identify_matches(storage_partitions, maxThreads);
+    dataSet<matching> *matchesDS2 = m_matching_storage_mngr->identify_matches(storage_partitions, maxThreads);
+
+    // Count actual matches (pairs)
+    size_t total_laptop_matches = 0;
+    size_t total_storage_matches = 0;
     
-    printf("Found %zu potential duplicates in laptop dataset\n", matchesDS1->size);
-    printf("Found %zu potential duplicates in storage dataset\n", matchesDS2->size);
+    printf("\nDetailed match counts:\n");
+    
+    printf("Laptop partitions matches:\n");
+    for (size_t i = 0; i < matchesDS1->size; i++) {
+        printf("Partition %zu: %zu matches\n", i, matchesDS1->data[i].size);
+        total_laptop_matches += matchesDS1->data[i].size;
+    }
+    
+    printf("Storage partitions matches:\n");
+    for (size_t i = 0; i < matchesDS2->size; i++) {
+        printf("Partition %zu: %zu matches\n", i, matchesDS2->data[i].size);
+        total_storage_matches += matchesDS2->data[i].size;
+    }
+    
+    printf("\nFound %zu potential duplicates in laptop dataset (%zu partitions)\n", 
+           total_laptop_matches, matchesDS1->size);
+    printf("Found %zu potential duplicates in storage dataset (%zu partitions)\n", 
+           total_storage_matches, matchesDS2->size);
 
     int elapsedMatch = clock() - start;
     printf("time elapsed for matching: %.2f s\n", elapsedMatch / (float)CLOCKS_PER_SEC);

@@ -3,6 +3,7 @@
 #include <cstring>
 #include <stdlib.h>
 #include <cstdio>
+#include "debug_utils.h"
 
 #ifndef DUPLICATE_DETECTION_DATATYPES
 #define DUPLICATE_DETECTION_DATATYPES
@@ -133,7 +134,7 @@ typedef enum category_enum //define for laptop as well as storage_drive
     assembler_brand, //both
     assembler_modell, //both
     ram_capacity, storage_capacity = ram_capacity, //laptop , storage
-    rom_capacity, //storage
+    rom_capacity, connection_type = rom_capacity,//storage, storage
     cpu_brand, //laptop
     cpu_fam, //laptop
     cpu_series, //laptop
@@ -176,12 +177,12 @@ struct laptop
 
     void print() const
     {
-        printf("T.V. s: %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu", brand, model, rom, ram, cpu_brand, cpu_fam, cpu_series, gpu_brand, gpu_fam, gpu_series, display_resolution, display_size);
+        printf("[%hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu]", brand, model, rom, ram, cpu_brand, cpu_fam, cpu_series, gpu_brand, gpu_fam, gpu_series, display_resolution, display_size);
     }
 
     void println() const
     {
-        printf("T.V. s: %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu\n",brand,model,rom,ram,cpu_brand,cpu_fam,cpu_series,gpu_brand,gpu_fam,gpu_series,display_resolution,display_size);
+        printf("[%hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu]\n",brand,model,rom,ram,cpu_brand,cpu_fam,cpu_series,gpu_brand,gpu_fam,gpu_series,display_resolution,display_size);
     }
 
     const token &operator[](char idx) const
@@ -192,12 +193,14 @@ struct laptop
 
     token &operator[](const int idx)
     {
+        // Add bounds check to prevent out-of-bounds access        
         token *tokens = &brand;
         return tokens[idx];
     }
 
     token &operator[](const category idx)
     {
+        // Add bounds check to prevent out-of-bounds access
         token *tokens = &brand;
         return tokens[idx];
     }
@@ -214,7 +217,7 @@ struct laptop
         //1 == ismatch
         //2 == use fallback if wanted
         const void* jumptable[] = {&&compFalse,&&compTrue};
-        const void *jumptableRET[] = {
+        const void *jumptableTRUE[] = {
             &&checkComp,
             &&checkComp,
             &&checkComp,
@@ -226,36 +229,68 @@ struct laptop
             &&checkComp,
             &&checkComp,
             &&checkComp,
+            &&useFallBack,
             &&useFallBack
         };
-        char c = assembler_brand;
+        const void *jumptableUNKNOWN[] =
+        {
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&useFallBack,
+            &&useFallBack
+        };
+        char c = assembler_brand; // Start with first category
         char equal = 0;
-        const char required = 3;
-        const char max = 5;
+        const char required = 3;        
         
         checkComp:
+        // Check if we've gone beyond the valid categories                  
         if(!(*this)[c] || !other[c])
         {
+            //DEBUG_MATCH("Category %d (%s) not comparable (values: %hu, %hu)\n", c, category_name(c), (*this)[c], other[c]);
             goto notComparable;
         }
+        
+        
         goto *jumptable[(*this)[c] == other[c]]; //returns 0 or 1, 0 should be false, 1 should be true
 
         compTrue:
         ++equal;
         ++c;
-        goto *jumptableRET[equal];
+        
+        // Check for out-of-bounds jump in jumptableRET        
+        goto *jumptableTRUE[equal];
         
         compFalse:
+        
         return 0; //0 == not identical, found information discarding equality
         
         notComparable:
         ++c;
-        goto *jumptableRET[equal];
+        
+        // prevent going out of bounds, by limiting where to jump to    
+        goto *jumptableUNKNOWN[c];
 
         useFallBack:
-        return 2;
+        if(equal > required) //if we found enough to suspect a match, look again with a different method
+        {
+            return 2;
+        }
+        return 0; //otherwise dont waste time looking
 
         foundIdentical:
+        this->print();
+        printf(" == ");
+        other.println();
         return 1;
     }
 
@@ -292,7 +327,7 @@ struct laptop
             
         //} 
         return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten*/
-        return 1.0; //noch nicht implemenmtiert, beraten was die beste methode ist, ich schlage 2er-tupel jaccar vor, da es sehr effizent umsetzbar ist
+        return 0.0; //noch nicht implemenmtiert, beraten was die beste methode ist, ich schlage 2er-tupel jaccar vor, da es sehr effizent umsetzbar ist
     }
 }; 
 
@@ -306,19 +341,31 @@ struct storage_drive
     token brand;                          // Index auf herstellerliste bzw Laptop marke
     token model;                          // Index auf ModellListe bzw Laptop Serienname eg ThinkPad
     token rom;                            // Speicherkapazität in GB, z.B. 128, 256, 512, 1024, 2048 or TB, z.b. 1TB 2TB 3TB...
-    token fill;
+    token connection_type;
 
     size_t id;
     quintupel* descriptor;
 
     void print() const
     {
-        printf("T.V. s: %hu %hu %hu", brand, model, rom);
+        printf("[%hu %hu %hu]", brand, model, rom);
     }
 
     void println() const
     {
-        printf("T.V. s: %hu %hu %hu\n", brand, model, rom);
+        printf("[%hu %hu %hu]\n", brand, model, rom);
+    }
+
+    const token &operator[](char idx) const
+    {
+        const token *tokens = &brand;
+        return tokens[idx];
+    }
+
+    token &operator[](const char idx)
+    {
+        token *tokens = &brand;
+        return tokens[idx];
     }
 
     token &operator[](const category idx)
@@ -333,20 +380,79 @@ struct storage_drive
         return tokens[idx];
     }
 
-    bool operator==(storage_drive &other)
+    int operator==(storage_drive &other)
     {
-        return (*this | other) == 1.0;
+        return (*this == static_cast<const storage_drive&>(other));
     }
 
-    const bool operator==(const storage_drive &other) const
+    int operator==(const storage_drive &other) const
     {
-        return (*this | other) == 1.0;
+        //0 == nomatch
+        //1 == ismatch
+        //2 == use fallback if wanted
+        const void* jumptable[] = {&&compFalse, &&compTrue};
+        const void *jumptableTRUE[] = {
+            &&checkComp, // increase amount of checkComp Lables to (variable 18 lines down)required whenever we add a field
+            &&checkComp,
+            &&foundIdentical, //2 equal = match
+            &&useFallBack, //not really needed, just to make sure we dont run over the edge (should not happen)
+            &&useFallBack
+        };
+        const void *jumptableUNKNOWN[] =
+        {
+            &&checkComp,
+            &&checkComp,
+            &&checkComp,
+            &&useFallBack,
+            &&useFallBack
+        };
+        
+        char c = assembler_brand;  // Start with brand comparison
+        char equal = 0;
+        const char required = 2;   // Need at least 2 matching categories
+        
+        checkComp:               
+        if(!(*this)[c] || !other[c])
+        {
+            //DEBUG_MATCH("Storage category %d (%s) not comparable (values: %hu, %hu)\n", c, category_name(c), (*this)[c], other[c]);
+            goto notComparable;
+        }
+        
+        goto *jumptable[(*this)[c] == other[c]];
+
+        compTrue:
+        ++equal;
+        ++c;
+        
+        // Jump to the next step based on how many matches we've found        
+        goto *jumptableTRUE[equal];
+        
+        compFalse:
+        return 0; //0 == not identical, found information discarding equality
+        
+        notComparable:
+        ++c;
+        // Jump to next step, let jumptable handle bounds    
+        goto *jumptableUNKNOWN[c];
+
+        useFallBack:
+        if(equal > required) //if we found enough to suspect a match, look again with a different method
+        {
+            return 2;
+        }
+        return 0; //otherwise dont waste time looking
+
+        foundIdentical:
+        this->print(); //just for debug, take out when not needed anylonger
+        printf(" == ");
+        other.println();
+        return 1;
     }
 
     double operator|(const storage_drive &other) const // implementiere eine Vergleichsfunktion basieren auf einer anderen Metrik als dem Direkten tokenvergleich.
     {
 
-        return 1.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
+        return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
     }
 };
 
