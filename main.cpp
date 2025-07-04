@@ -92,7 +92,7 @@ int main(int argc, char** argv)
     m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_marken.tokenz",assembler_brand);
     m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_modelle.tokenz", assembler_modell);
     m_Storage_tokenization_mngr->loadTokenList("../data/rom_size_festplatten.tokenz",rom_capacity);
-    m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_schnittstellen.tokenz")
+    //m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_schnittstellen.tokenz")
 
     int start = clock();
 

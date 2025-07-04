@@ -260,7 +260,6 @@ struct laptop
             goto notComparable;
         }
         
-        
         goto *jumptable[(*this)[c] == other[c]]; //returns 0 or 1, 0 should be false, 1 should be true
 
         compTrue:
@@ -271,7 +270,6 @@ struct laptop
         goto *jumptableTRUE[equal];
         
         compFalse:
-        
         return 0; //0 == not identical, found information discarding equality
         
         notComparable:
