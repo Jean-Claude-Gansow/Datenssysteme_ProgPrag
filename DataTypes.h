@@ -55,9 +55,10 @@ struct dataSet
     {
         return data[index];
     }
-    t* c_arr()
+
+    t operator[](unsigned int index) 
     {
-        return data;
+        return data[index];
     }
 };
 
@@ -134,15 +135,15 @@ typedef enum category_enum //define for laptop as well as storage_drive
     assembler_brand, //both
     assembler_modell, //both
     ram_capacity, storage_capacity = ram_capacity, //laptop , storage
-    rom_capacity, connection_type = rom_capacity,//storage, storage
-    cpu_brand, //laptop
-    cpu_fam, //laptop
-    cpu_series, //laptop
-    gpu_brand, //laptop
-    gpu_fam, //laptop
-    gpu_series, //laptop
-    display_resolution, //laptop
-    display_size //laptop
+    rom_capacity, class_a = rom_capacity,//storage, storage
+    cpu_brand, class_c = cpu_brand,  //laptop
+    cpu_fam, class_v = cpu_fam,//laptop
+    cpu_series, class_u = cpu_series, //laptop
+    gpu_brand, class_uhs = gpu_brand, //laptop
+    gpu_fam,  variant = gpu_fam,//laptop
+    gpu_series,  data_speed = gpu_series,//laptop
+    display_resolution, formfactor = display_resolution, //laptop
+    display_size, connection_type = display_size //laptop
 } category, token_class;
 
 struct laptop
@@ -160,6 +161,7 @@ struct laptop
     laptop()
     {
         memset(this, 0, sizeof(laptop));
+        token_count = 0;
     }
 
     token brand; //Index auf herstellerliste bzw Laptop marke
@@ -171,7 +173,7 @@ struct laptop
     token display_resolution; // Auflösung des Displays, z.B. 1920x1080, 2560x1440, 3840x2160
     token display_size; // Größe des Displays in Zoll, z.B. 13, 15, 17, 19
 
-
+    size_t token_count; // Anzahl der Tokens mit Informationen (> 0)
     size_t id;
     char * description; // Pointer auf eine Zeichenkette, die die Beschreibung des Laptops enthält
 
@@ -216,115 +218,105 @@ struct laptop
         //0 == nomatch
         //1 == ismatch
         //2 == use fallback if wanted
-        const void* jumptable[] = {&&compFalse,&&compTrue};
-        const void *jumptableTRUE[] = {
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&foundIdentical,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&useFallBack,
-            &&useFallBack
-        };
+        const void *jumptable[] = {&&compFalse, &&compTrue};
+        const void *jumptableTRUE[] =
+            {
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical
+            };
+
         const void *jumptableUNKNOWN[] =
         {
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&useFallBack,
-            &&useFallBack
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&useFallBack,
+                &&useFallBack};
+
+        const void *jumptableCATEGORY_CHECK[] =
+        {
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&useFallBack
         };
         char c = assembler_brand; // Start with first category
         char equal = 0;
-        const char required = 3;        
-        
-        checkComp:
-        // Check if we've gone beyond the valid categories                  
-        if(!(*this)[c] || !other[c])
+        char different = 0;
+        const char required = 3;
+
+    checkComp:
+        // Check if we've gone beyond the valid categories
+        goto *jumptableCATEGORY_CHECK[c];
+    Comp:
+        if (!(*this)[c] || !other[c])
         {
-            //DEBUG_MATCH("Category %d (%s) not comparable (values: %hu, %hu)\n", c, category_name(c), (*this)[c], other[c]);
+            // DEBUG_MATCH("Category %d (%s) not comparable (values: %hu, %hu)\n", c, category_name(c), (*this)[c], other[c]);
             goto notComparable;
         }
-        
-        goto *jumptable[(*this)[c] == other[c]]; //returns 0 or 1, 0 should be false, 1 should be true
 
-        compTrue:
+        goto *jumptable[(*this)[c] == other[c]]; // returns 0 or 1, 0 should be false, 1 should be true
+
+    compTrue:
         ++equal;
         ++c;
-        
-        // Check for out-of-bounds jump in jumptableRET        
+
+        // Check for out-of-bounds jump in jumptableRET
         goto *jumptableTRUE[equal];
-        
-        compFalse:
-        return 0; //0 == not identical, found information discarding equality
-        
-        notComparable:
+
+    compFalse:
+        return 0; // 0 == not identical, found information discarding equality
+
+    notComparable:
         ++c;
-        
-        // prevent going out of bounds, by limiting where to jump to    
+
+        // prevent going out of bounds, by limiting where to jump to
         goto *jumptableUNKNOWN[c];
 
-        useFallBack:
-        if(equal > required) //if we found enough to suspect a match, look again with a different method
+    useFallBack:
+        if (equal > required) // if we found enough to suspect a match, look again with a different method
         {
             return 2;
         }
-        return 0; //otherwise dont waste time looking
+        return 0; // otherwise dont waste time looking
 
-        foundIdentical:
-        this->print();
-        printf(" == ");
-        other.println();
+    foundIdentical:
+        //this->print();
+        //printf(" == ");
+        //other.println();
         return 1;
     }
 
     double operator | (const laptop& other) const  //implementiere eine Vergleichsfunktion basierend auf djakar
     {
-        /*void* jumpTable1[128] = {};
-        void *jumpTable2[128] = {};
-        char alphabetThis[127];
-        char alphabetOther[127];
-        memset(alphabetThis, 0, 127);
-        memset(alphabetOther, 0, 127);
-        char* c1 = this->description-1,*c2 =other.description-1; //wir fangen mit ++c1 an, d.h. wir landen bei 
-
-        loopc1:
-        alphabetThis[*c1]++;
-        goto *jumpTable1[*(++c1)];
-        loopc2:
-        alphabetOther[*c2]++;
-        goto *jumpTable2[*(++c2)];
-        endLoopC1:
-        jumpTable2[0] = &&exitUs;
-        c1 = c2; //switch lable 2
-        goto *jumpTable1[*c2];
-        endLoopC2: 
-        jumpTable1[0] = &&exitUs;
-        c2 = c1;
-        goto *jumpTable2[*c2];
-        exitUs:
-        //hier methode zum ähnlichkeitsindex basierend auf buchstabencount nutzen (experimentell, weitere operatoren definieren)
-        
-        //alphabet[32] = 0;
-        //for(char* c1 = this->description,*c2 = other.description;;)
-        //{
-            
-        //} 
-        return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten*/
         return 0.0; //noch nicht implemenmtiert, beraten was die beste methode ist, ich schlage 2er-tupel jaccar vor, da es sehr effizent umsetzbar ist
     }
 }; 
@@ -334,24 +326,34 @@ struct storage_drive
     storage_drive()
     {
         memset(this,0,sizeof(storage_drive));
+        token_count = 0;
     }
 
-    token brand;                          // Index auf herstellerliste bzw Laptop marke
-    token model;                          // Index auf ModellListe bzw Laptop Serienname eg ThinkPad
-    token rom;                            // Speicherkapazität in GB, z.B. 128, 256, 512, 1024, 2048 or TB, z.b. 1TB 2TB 3TB...
-    token connection_type;
+    token brand = 0;                          // Index auf herstellerliste bzw Laptop marke
+    token model = 0;                          // Index auf ModellListe bzw Laptop Serienname eg ThinkPad
+    token capacity = 0;                            // Speicherkapazität in GB, z.B. 128, 256, 512, 1024, 2048 or TB, z.b. 1TB 2TB 3TB...
+    token class_a = 0;
+    token class_c = 0;
+    token class_v = 0;
+    token class_u = 0;
+    token class_uhs = 0;
+    token variant = 0;
+    token data_speed = 0;
+    token formfactor = 0;
+    token connection_type = 0;               
 
-    size_t id;
-    quintupel* descriptor;
+    size_t token_count = 0;                   // Anzahl der Tokens mit Informationen (> 0)
+    size_t id = 0;
+    quintupel* descriptor = nullptr;
 
     void print() const
     {
-        printf("[%hu %hu %hu]", brand, model, rom);
+        printf("[%hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu]", brand, model, capacity, class_a, class_c, class_v, class_u, class_uhs, variant ,data_speed, formfactor, connection_type);
     }
 
     void println() const
     {
-        printf("[%hu %hu %hu]\n", brand, model, rom);
+        printf("[%hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu %hu]\n", brand, model, capacity, class_a, class_c, class_v, class_u, class_uhs, variant, data_speed, formfactor, connection_type);
     }
 
     const token &operator[](char idx) const
@@ -384,72 +386,107 @@ struct storage_drive
     }
 
     int operator==(const storage_drive &other) const
-    {
+    {      
         //0 == nomatch
         //1 == ismatch
         //2 == use fallback if wanted
-        const void* jumptable[] = {&&compFalse, &&compTrue};
-        const void *jumptableTRUE[] = {
-            &&checkComp, // increase amount of checkComp Lables to (variable 18 lines down)required whenever we add a field
-            &&checkComp,
-            &&foundIdentical, //2 equal = match
-            &&useFallBack, //not really needed, just to make sure we dont run over the edge (should not happen)
-            &&useFallBack
-        };
+        const void *jumptable[] = {&&compFalse, &&compTrue};
+        const void *jumptableTRUE[] =
+            {
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical,
+                &&foundIdentical};
+
         const void *jumptableUNKNOWN[] =
-        {
-            &&checkComp,
-            &&checkComp,
-            &&checkComp,
-            &&useFallBack,
-            &&useFallBack
-        };
-        
-        char c = assembler_brand;  // Start with brand comparison
+            {
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&checkComp,
+                &&useFallBack,
+                &&useFallBack
+            };
+
+        const void *jumptableCATEGORY_CHECK[] =
+            {
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&Comp,
+                &&useFallBack};
+        char c = assembler_brand; // Start with first category
         char equal = 0;
-        const char required = 2;   // Need at least 2 matching categories
-        
-        checkComp:               
-        if(!(*this)[c] || !other[c])
+        const char required = 3;
+
+    checkComp:
+        // Check if we've gone beyond the valid categories
+        goto *jumptableCATEGORY_CHECK[c];
+        Comp:
+        if (!(*this)[c] || !other[c])
         {
-            //DEBUG_MATCH("Storage category %d (%s) not comparable (values: %hu, %hu)\n", c, category_name(c), (*this)[c], other[c]);
+            // DEBUG_MATCH("Category %d (%s) not comparable (values: %hu, %hu)\n", c, category_name(c), (*this)[c], other[c]);
             goto notComparable;
         }
-        
-        goto *jumptable[(*this)[c] == other[c]];
 
-        compTrue:
+        goto *jumptable[(*this)[c] == other[c]]; // returns 0 or 1, 0 should be false, 1 should be true
+
+    compTrue:
         ++equal;
         ++c;
-        
-        // Jump to the next step based on how many matches we've found        
+
+        // Check for out-of-bounds jump in jumptableRET
         goto *jumptableTRUE[equal];
-        
-        compFalse:
-        return 0; //0 == not identical, found information discarding equality
-        
-        notComparable:
+
+    compFalse:
+        return 0; // 0 == not identical, found information discarding equality
+
+    notComparable:
         ++c;
-        // Jump to next step, let jumptable handle bounds    
+
+        // prevent going out of bounds, by limiting where to jump to
         goto *jumptableUNKNOWN[c];
 
-        useFallBack:
-        if(equal > required) //if we found enough to suspect a match, look again with a different method
+    useFallBack:
+        if (equal > required) // if we found enough to suspect a match, look again with a different method
         {
             return 2;
         }
-        return 0; //otherwise dont waste time looking
+        return 0; // otherwise dont waste time looking
 
-        foundIdentical:
-        this->print(); //just for debug, take out when not needed anylonger
-        printf(" == ");
-        other.println();
+    foundIdentical:
+        //this->print();
+        //printf(" == ");
+        //other.println();
         return 1;
     }
 
     double operator|(const storage_drive &other) const // implementiere eine Vergleichsfunktion basieren auf einer anderen Metrik als dem Direkten tokenvergleich.
     {
-
         return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
     }
 };

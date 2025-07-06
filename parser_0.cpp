@@ -6,7 +6,7 @@
 #include "Utillity.h"
 
 #ifndef COPY_STRING_FIELDS
-#define COPY_STRING_FIELDS 1  // 0 = Pointer merken, 1 = strdup
+#define COPY_STRING_FIELDS 0  // 0 = Pointer merken, 1 = strdup
 #endif
 
 // #define PRINT_FILE_OUTPUT 1  // definiert -> Ausgabe in Datei 

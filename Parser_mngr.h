@@ -21,6 +21,19 @@ using ParserFunc = size_t (*)(const char *line, void *out);
 class Parser_mngr
 {
 public:
+    Parser_mngr() {}
+    
+    ~Parser_mngr() {
+        // Clean up dynamically loaded libraries
+        for (void* handle : hSoFile) {
+            if (handle) {
+                dlclose(handle);
+            }
+        }
+        hSoFile.clear();
+        parsers.clear();
+    }
+    
     ParserFunc create_parser(const std::string &format);
     //neu
     template <typename T>
@@ -60,7 +73,7 @@ public:
 
         printf("combining Buffer: Combined Buffer size %zu\n",result->size);
 
-        result->data = (T *)malloc(sizeof(T) * result->size);
+        result->data = new T[result->size];
         for (size_t t = 0,offset = 0; t < num_threads; ++t)
         {
             memcpy(result->data + offset, thread_buffer[t], sizeof(T) * thread_count[t]);
@@ -68,6 +81,8 @@ public:
             delete[] thread_buffer[t];
         }
 
+        delete[] thread_buffer;
+        delete[] thread_count;
         return result;
     }
 
@@ -82,4 +97,4 @@ private:
     void compile_code(const std::string &cpp_code, const std::string &name);
 };
 
-#endif 
+#endif

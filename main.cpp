@@ -32,20 +32,15 @@ std::string files[] =
 int main(int argc, char** argv)
 {   
     // Print debug configuration information
-    print_debug_configuration();
-    
-    char test[3] = "\"\n";
-    printf("%hu\n",(unsigned short)((*test << 8) | *(test+1)));
-
     printf("Reading Dataset: Laptops from path: %s\n",files[0].c_str());
     printf("Reading Dataset: Storage from path: %s\n",files[1].c_str());
     printf("Reading Dataset: Laptops-Solution from path: %s\n",files[2].c_str());
     printf("Reading Dataset: Storage-Solution from path: %s\n",files[3].c_str());
 
     Tokenization_mngr<12, single_t, laptop> *m_Laptop_tokenization_mngr = new Tokenization_mngr<12, single_t, laptop>({"12","single_t","laptop"});
-    Tokenization_mngr<4, quintupel, storage_drive> *m_Storage_tokenization_mngr = new Tokenization_mngr<4, quintupel, storage_drive>({"4","quintupel","storage_drive"});
-    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>(1000);
-    Partitioning_mngr<quintupel,storage_drive,4> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,4>(1000);
+    Tokenization_mngr<12, quintupel, storage_drive> *m_Storage_tokenization_mngr = new Tokenization_mngr<12, quintupel, storage_drive>({"12","quintupel","storage_drive"});
+    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>(5000);
+    Partitioning_mngr<quintupel,storage_drive,12> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,12>(5000);
     Matching_mngr<laptop>* m_matching_laptop_mngr = new Matching_mngr<laptop>();
     Matching_mngr<storage_drive> *m_matching_storage_mngr = new Matching_mngr<storage_drive>();
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
@@ -70,28 +65,56 @@ int main(int argc, char** argv)
     //rom_capacity: 3
     //
 
-    std::vector<category> laptop_partition_hierarchy = {assembler_brand, assembler_modell, cpu_brand, ram_capacity};
+    std::vector<category> laptop_partition_hierarchy = {assembler_brand, assembler_modell, cpu_brand, cpu_fam, ram_capacity};
     std::vector<category> storage_partition_hierarchy = {assembler_brand, assembler_modell, rom_capacity};
     //TODO: Listenbäume aufbauen. Format: Token;Token;Token;...Token\n -> index = line
     //TODO: Listen zuusammenführen -> Klassenindices können erst dann korrekt gebaut werden.
     m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_marken.tokenz",assembler_brand); //laptop brand
-    m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_modelle.tokenz", assembler_modell); //laptop modell
-
+    m_Laptop_tokenization_mngr->loadTokenList("../data/acer_laptop_modelle.tokenz", assembler_modell,assembler_brand); //laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/asus_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/dell_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/fujitsu_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/gigabyte_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/hp_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/huawei_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/lenovo_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/lg_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/microsoft_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/msi_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/packard-bell_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/panasonic_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/samsung_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell
+    m_Laptop_tokenization_mngr->loadTokenList("../data/sony_laptop_modelle.tokenz", assembler_modell, assembler_brand); // laptop modell//----
     m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_marken.tokenz", cpu_brand); //cpu brand ++ inference tokens for cpu modells
     m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle_amd.tokenz",cpu_fam,cpu_brand); //cpu familly (i3,i5,i7...)
     m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle_intel.tokenz",cpu_fam,cpu_brand); //cpu familly (i3,i5,i7...)
     m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle_ibm.tokenz",cpu_fam,cpu_brand); //cpu familly (i3,i5,i7...)
     m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_modelle_qualcomm.tokenz",cpu_fam,cpu_brand); //cpu familly (i3,i5,i7...)
-    //m_Laptop_tokenization_mngr->loadTokenList("../data/cpu_series.tokenz", cpu_series); //cpu series (10400kf,14100K...)
     m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_marken.tokenz", gpu_brand);//gpu brand 
-    //m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_modelle.tokenz", gpu_fam);// gpu familly (gt,gtx,rtx,radeon ...)
-    //m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_series.tokenz", gpu_series);// gpu series (no clue yet)
+    m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_modelle_amd.tokenz", gpu_fam,gpu_brand);
+    m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_modelle_intel.tokenz", gpu_fam, gpu_brand);
+    m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_modelle_nvidia.tokenz", gpu_fam, gpu_brand);
     m_Laptop_tokenization_mngr->loadTokenList("../data/ram_size.tokenz",ram_capacity);//
     m_Laptop_tokenization_mngr->loadTokenList("../data/rom_size.tokenz",rom_capacity);
+    m_Laptop_tokenization_mngr->loadTokenList("../data/display_resolutions.tokenz", display_resolution); //
+    m_Laptop_tokenization_mngr->loadTokenList("../data/display_size.tokenz", display_size);
 
-    m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_marken.tokenz",assembler_brand);
-    m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_modelle.tokenz", assembler_modell);
-    m_Storage_tokenization_mngr->loadTokenList("../data/rom_size_festplatten.tokenz",rom_capacity);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_marken.tokenz",assembler_brand);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_modelle.tokenz", assembler_modell);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_capacity.tokenz",storage_capacity);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_a_klassen.tokenz", class_a);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_c_klassen.tokenz", class_c);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_v_klassen.tokenz", class_v);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_u_klassen.tokenz", class_u);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_uhs_klassen.tokenz", class_uhs);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_varianten.tokenz", variant);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_daten_geschwindigkeiten.tokenz", data_speed);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_formfaktoren.tokenz", formfactor);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_pcie_schnittstellen.tokenz", connection_type);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_sata_schnittstellen.tokenz", connection_type);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_usb_schnittstellen.tokenz", connection_type);
+    m_Storage_tokenization_mngr->loadTokenList("../data/storage_extra_schnittstellen.tokenz", connection_type);
+
     //m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_schnittstellen.tokenz")
 
     int start = clock();
@@ -99,11 +122,11 @@ int main(int argc, char** argv)
     // 2. Multi-Threaded Parsing für alle Datasets
     dataSet<single_t>* dataSet1 = parser_mngr.parse_multithreaded<single_t>(file1.data(), file1.size(), file1.line_count(), "%_,%V", maxThreads);
     printf("Parsed %zu lines from file1:\n", dataSet1->size);
-    print_Dataset(*dataSet1, "%_,%V");
+    //print_Dataset(*dataSet1, "%_,%V");
 
     dataSet<quintupel>* dataSet2 = parser_mngr.parse_multithreaded<quintupel>(file2.data(), file2.size(), file2.line_count(), "%_,%s,%f,%s,%s,%V", maxThreads);
     printf("Parsed %zu lines from file2\n", dataSet2->size);
-    print_Dataset(*dataSet2, "%_,%s,%f,%s,%s,%V");
+    //print_Dataset(*dataSet2, "%_,%s,%f,%s,%s,%V");
 
     //dataSet<match>* dataSetSol1 = parser_mngr.parse_multithreaded<match>(file3.data(), file3.size(), file3.line_count(), "%d,%d", maxThreads);
     //printf("Parsed %zu lines from file3\n", dataSetSol1->size);
@@ -125,8 +148,8 @@ int main(int argc, char** argv)
     printf("tokenized dataset laptops: size: %zu\n",tokenized_laptops->size);
     printf("tokenized dataset storage: size: %zu\n", tokenized_storage->size);
 
-    tokenized_laptops->print();
-    tokenized_storage->print();
+    //tokenized_laptops->print();
+    //tokenized_storage->print();
 
     int elapsedTokenize = clock() - start;
     printf("\n\n==================================================================================================================================\n\n");
@@ -157,14 +180,19 @@ int main(int argc, char** argv)
     //print_partitions_field(*laptop_partitions,0);
     //print_partitions_field(*storage_partitions, 0);
 
+    printf("\n\n==================================================================================================================================\n\n");
+
     int elapsedBlock = clock() - start;
     printf("time elapsed for generating Blocks: %.2f s\n", elapsedBlock / (float)CLOCKS_PER_SEC);
+
+    printf("\n\n==================================================================================================================================\n\n");
 
     start = clock();
 
     printf("Starting duplicate detection within partitions...\n");
     // Use simpler matching approach for better debugging
     dataSet<matching>* matchesDS1 = m_matching_laptop_mngr->identify_matches(laptop_partitions, maxThreads);
+    printf("Starting searching for duplicates of storage devices.\n");
     dataSet<matching> *matchesDS2 = m_matching_storage_mngr->identify_matches(storage_partitions, maxThreads);
 
     // Count actual matches (pairs)
@@ -185,10 +213,41 @@ int main(int argc, char** argv)
         total_storage_matches += matchesDS2->data[i].size;
     }
     
-    printf("\nFound %zu potential duplicates in laptop dataset (%zu partitions)\n", 
-           total_laptop_matches, matchesDS1->size);
-    printf("Found %zu potential duplicates in storage dataset (%zu partitions)\n", 
-           total_storage_matches, matchesDS2->size);
+   
+    printf("\n-----------------------------------------------------------------------------------------------------------------------------\\nn");
+
+    printf("\nDetailed Laptop Matches (Format: <id1,id2>):\n");
+    for (size_t i = 0; i < matchesDS2->size; i++)
+    {
+        if (matchesDS1->data[i].size > 0)
+        {
+            printf("Partition %zu Matches:\n", i);
+            for (size_t j = 0; j < matchesDS2->data[i].size; j++)
+            {
+                printf("  <%zu,%zu>\n",
+                       static_cast<size_t>(matchesDS1->data[i].matches[j].data[0]),
+                       static_cast<size_t>(matchesDS1->data[i].matches[j].data[1]));
+            }
+        }
+    }
+
+    printf("\n-----------------------------------------------------------------------------------------------------------------------------\n\n");
+
+    // Detaillierte Ausgabe der Storage-Drive Matches im Format <id1,id2>
+    printf("\nDetailed Storage Drive Matches (Format: <id1,id2>):\n");
+    for (size_t i = 0; i < matchesDS2->size; i++) {
+        if (matchesDS2->data[i].size > 0) {
+            printf("Partition %zu Matches:\n", i);
+            for (size_t j = 0; j < matchesDS2->data[i].size; j++) {
+                printf("  <%zu,%zu>\n", 
+                    static_cast<size_t>(matchesDS2->data[i].matches[j].data[0]),
+                    static_cast<size_t>(matchesDS2->data[i].matches[j].data[1]));
+            }
+        }
+    }
+
+    printf("\nFound %zu potential duplicates in laptop dataset (%zu partitions)\n", total_laptop_matches, matchesDS1->size);
+    printf("Found %zu potential duplicates in storage dataset (%zu partitions)\n", total_storage_matches, matchesDS2->size);
 
     int elapsedMatch = clock() - start;
     printf("time elapsed for matching: %.2f s\n", elapsedMatch / (float)CLOCKS_PER_SEC);
@@ -210,11 +269,95 @@ int main(int argc, char** argv)
     //printf("Evaluation of Duplicate Detection within DataSet2: %f\n", DS2EvaluationScore);
 
     // Aufräumen - Speicher freigeben
-    if (matchesDS1 && matchesDS1->data) delete matchesDS1->data;
-    
-    if (matchesDS2 && matchesDS2->data) delete matchesDS2->data;
-    delete matchesDS1;
-    delete matchesDS2;
+    // Matches aufräumen
+    {
+        if (matchesDS1) {
+            if (matchesDS1->data) {
+                for (size_t i = 0; i < matchesDS1->size; i++) {
+                    if (matchesDS1->data[i].matches) {
+                        delete[] matchesDS1->data[i].matches;
+                    }
+                }
+                delete[] matchesDS1->data;
+            }
+            delete matchesDS1;
+        }
 
+        if (matchesDS2) {
+            if (matchesDS2->data) {
+                for (size_t i = 0; i < matchesDS2->size; i++) {
+                    if (matchesDS2->data[i].matches) {
+                        delete[] matchesDS2->data[i].matches;
+                    }
+                }
+                delete[] matchesDS2->data;
+            }
+            delete matchesDS2;
+        }
+
+        // Partitionen aufräumen
+        if (laptop_partitions) {
+            if (laptop_partitions->data) {
+                for (size_t i = 0; i < laptop_partitions->size; i++) {
+                    if (laptop_partitions->data[i].data) {
+                        delete[] laptop_partitions->data[i].data;
+                    }
+                }
+                delete[] laptop_partitions->data;
+            }
+            delete laptop_partitions;
+        }
+
+        if (storage_partitions) {
+            if (storage_partitions->data) {
+                for (size_t i = 0; i < storage_partitions->size; i++) {
+                    if (storage_partitions->data[i].data) {
+                        delete[] storage_partitions->data[i].data;
+                    }
+                }
+                delete[] storage_partitions->data;
+            }
+            delete storage_partitions;
+        }
+
+        // Tokenisierte Daten aufräumen
+        if (tokenized_laptops) {
+            if (tokenized_laptops->data) {
+                delete[] tokenized_laptops->data;
+            }
+            delete tokenized_laptops;
+        }
+
+        if (tokenized_storage) {
+            if (tokenized_storage->data) {
+                delete[] tokenized_storage->data;
+            }
+            delete tokenized_storage;
+        }
+
+        // Eingabedaten aufräumen
+        if (dataSet1) {
+            if (dataSet1->data) {
+                delete[] dataSet1->data;
+            }
+            delete dataSet1;
+        }
+
+        if (dataSet2) {
+            if (dataSet2->data) {
+                delete[] dataSet2->data;
+            }
+            delete dataSet2;
+        }
+
+        // Manager aufräumen
+        delete m_Laptop_tokenization_mngr;
+        delete m_Storage_tokenization_mngr;
+        delete m_partitioning_laptop_mngr;
+        delete m_partitioning_storage_mngr;
+        delete m_matching_laptop_mngr;
+        delete m_matching_storage_mngr;
+        delete m_evaluation_mngr;
+    }
     return 0;
 }

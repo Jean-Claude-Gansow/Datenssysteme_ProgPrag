@@ -18,37 +18,74 @@
 #define MAX_MATCHES_PER_ITEM 3
 
 template<typename compType>
-class Matching_mngr 
-{
-    
+class Matching_mngr {
+private:
+    // Klassenvariable für die gemeinsamen Match-Counts über alle Threads
+    std::atomic<size_t>* shared_match_counts;
+    size_t shared_match_counts_size;
 
 public:
-    Matching_mngr() {}
-    ~Matching_mngr() {}   
-   
+    Matching_mngr() : shared_match_counts(nullptr), shared_match_counts_size(0) {}
     
-
-    // Thread-sicheres Matching mit Atomics
+    ~Matching_mngr() {
+        // Sicherstellen, dass shared_match_counts freigegeben wird
+        freeSharedMatchCounts();
+    }
+    
+    // Allokieren der shared_match_counts mit einer bestimmten Größe
+    void allocateSharedMatchCounts(size_t size) {
+        // Erst freigeben, falls bereits allokiert
+        freeSharedMatchCounts();
+        
+        // Neu allokieren und initialisieren
+        shared_match_counts_size = size;
+        shared_match_counts = new std::atomic<size_t>[size]();
+        
+        // Explizites Initialisieren aller Elemente mit 0
+        for (size_t i = 0; i < size; ++i) {
+            shared_match_counts[i] = 0;
+        }
+    }
+    
+    // Freigeben der shared_match_counts
+    void freeSharedMatchCounts() {
+        if (shared_match_counts != nullptr) {
+            delete[] shared_match_counts;
+            shared_match_counts = nullptr;
+            shared_match_counts_size = 0;
+        }
+    }
+    
+    // Zurücksetzen aller Zähler auf 0
+    void resetSharedMatchCounts() {
+        if (shared_match_counts != nullptr) {
+            for (size_t i = 0; i < shared_match_counts_size; ++i) {
+                shared_match_counts[i] = 0;
+            }
+        }
+    }
+   
+    // Thread-sicheres Matching mit Atomics - verwendet jetzt die Klassenvariable
     void match_blocker_intern(partition* part, size_t start, size_t end, matching* findingsBuffer)
     {
-        // Jump-Table für die verschiedenen Ergebnisse des == Operators (0=Match, 1=No Match, 2=Fallback)
+        // Initialisiere das findingsBuffer-Objekt sofort, um uninitialisierte Werte zu vermeiden
+        if (findingsBuffer) {
+            findingsBuffer->size = 0;
+            findingsBuffer->matches = nullptr;
+        }
+        
+        // Jump-Table für die verschiedenen Ergebnisse des == Operators (0=No Match, 1=Match, 2=Fallback)
         static void *jumpTable[3] =
         {
             &&nomatch, &&ismatch, &&fallback
         };
         
-        // Verwende die globale MAX_MATCHES_PER_ITEM Konstante
-        
         // Jump-Tables für Element-Match-Limits
-        // Diese Tabellen haben MAX_MATCHES_PER_ITEM+1 Einträge
-        // Alle Indizes < MAX_MATCHES_PER_ITEM zeigen auf "check_item_X"
-        // Nur der letzte Eintrag (MAX_MATCHES_PER_ITEM) zeigt auf "skip_item_X"
         static void *itemLimitJumpTable_i[MAX_MATCHES_PER_ITEM + 1] = 
         {
             &&check_item_i, &&check_item_i, &&check_item_i, &&skip_item_i
         };
         
-        // Für das zweite Element: bei Überschreitung der maximalen Matches zum nächsten j springen
         static void *itemLimitJumpTable_j[MAX_MATCHES_PER_ITEM + 1] = 
         {
             &&check_item_j, &&check_item_j, &&check_item_j, &&skip_item_j
@@ -57,11 +94,28 @@ public:
         // Zähler für die gefundenen Matches
         unsigned int match_count = 0;
         
+        // Sicherstellen, dass die Eingabeparameter gültig sind
+        if (part == nullptr || part->data == nullptr || findingsBuffer == nullptr || start >= end || this->shared_match_counts == nullptr) {
+            fprintf(stderr, "Error: Invalid parameters in match_blocker_intern: part=%p, findingsBuffer=%p, start=%zu, end=%zu, shared_match_counts=%p\n", 
+                  part, findingsBuffer, start, end, this->shared_match_counts);
+            return;
+        }
+        
+        // Überprüfen der Arraygröße
+        if (end > this->shared_match_counts_size) {
+            fprintf(stderr, "Error: End index (%zu) exceeds shared_match_counts size (%zu)\n", 
+                   end, this->shared_match_counts_size);
+            return;
+        }
+        
+        // Debug-Output für Arraygröße und Speicherzugriffe
+       
+        
         // Maximale Kapazität des Buffers berechnen (worst case: jedes Paar ist ein Match)
         size_t range_size = end - start;
         size_t max_possible_matches = (range_size * (range_size - 1)) / 2;
         
-        // Temp-Puffer für die Matches erstellen
+        // Temp-Puffer für die Matches erstellen und mit Nullen initialisieren
         match* matches = new match[max_possible_matches];
         if (!matches) 
         {
@@ -69,201 +123,211 @@ public:
             exit(1);
         }
         
-        // Array zur Verfolgung der Match-Anzahl pro Element
-        // Dadurch können wir Elemente überspringen, die bereits genügend Matches haben
+        // Explizit alle Matches initialisieren (für erhöhte Sicherheit)
+        for (size_t i = 0; i < max_possible_matches; i++) {
+            matches[i].data[0] = 0;
+            matches[i].data[1] = 0;
+        }
         
         size_t comparison_count = 0;
         size_t skipped_comparisons = 0;
         
         for(size_t i = start; i < end; i++)
         {
+            // Überprüfe shared_match_counts bevor darauf zugegriffen wird
+            if (shared_match_counts == nullptr) {
+                fprintf(stderr, "Error: shared_match_counts is NULL at i=%zu\n", i);
+                return;
+            }
             
-            // Überprüfe mit Jump-Table ob wir dieses Element überspringen sollten
-            // Die match_count-Werte sollten nie größer als MAX_MATCHES_PER_ITEM sein
-            // Mit stärkerem Memory-Ordering, um sicherzustellen, dass wir den aktuellen Wert sehen
-            size_t count_i = atomic_match_counts[i].load(std::memory_order_acquire);
+            // Überprüfe, ob der Index gültig ist
+            if (i >= shared_match_counts_size) {
+                fprintf(stderr, "Error: Index i=%zu exceeds shared_match_counts_size=%zu\n", i, shared_match_counts_size);
+                return;
+            }
             
-            // Sicherheitsüberprüfung und Sprung
+            // Verwende die Klassenvariable anstatt des Parameters
+            size_t count_i = shared_match_counts[i].load(std::memory_order_acquire);
+            
             if (count_i >= MAX_MATCHES_PER_ITEM) {
-                DEBUG_MATCH_DETAILED("Element %zu wird übersprungen (bereits %zu Matches)\n", i, count_i);
                 goto skip_item_i;
             }
             
-            // Direkte Verwendung des Zählerwerts als Index
             goto *itemLimitJumpTable_i[count_i];
             
         skip_item_i:
-            // Element i hat bereits genug Matches, überspringe alle verbleibenden Vergleiche
             skipped_comparisons += (end - i - 1);
             continue;
             
-        check_item_i:
-            // Die ID und Daten des aktuellen Elements extrahieren
+        check_item_i:                              
+                // Debug: Überprüfen Sie die Gültigkeit von part->data[i][0] und part->data[i][1]
+                if (!part->data[i][1]) {
+                    fprintf(stderr, "ERROR: part->data[%zu][1] is NULL\n", i);
+                    return;
+                }
+                
+                // Debug: Überprüfen Sie die Gültigkeit des compType-Objekts
+                const compType* debug_entry = reinterpret_cast<compType*>(part->data[i][1]);
+
             uintptr_t id_i = (uintptr_t)part->data[i][0];
             const compType* entry_i = reinterpret_cast<compType*>(part->data[i][1]);
             
             for(size_t j = i+1; j < end; ++j)
             {
-                // Kein lokaler Index mehr notwendig, da wir nur noch mit atomic_match_counts arbeiten
-                
-                // Überprüfe mit Jump-Table ob wir dieses Element überspringen sollten
-                // Mit stärkerem Memory-Ordering, um sicherzustellen, dass wir den aktuellen Wert sehen
-                size_t count_j = atomic_match_counts[j].load(std::memory_order_acquire);
-                
-                // Sicherheitsüberprüfung und Sprung
-                if (count_j >= MAX_MATCHES_PER_ITEM) {
-                    DEBUG_MATCH_DETAILED("Element %zu wird übersprungen (bereits %zu Matches)\n", j, count_j);
-                    goto skip_item_j;
+                // Überprüfe shared_match_counts bevor darauf zugegriffen wird
+                if (shared_match_counts == nullptr) {
+                    fprintf(stderr, "Error: shared_match_counts is NULL at j=%zu\n", j);
+                    return;
                 }
                 
-                // Direkte Verwendung des Zählerwerts als Index
+                // Überprüfe, ob der Index gültig ist
+                if (j >= shared_match_counts_size) {
+                    fprintf(stderr, "Error: Index j=%zu exceeds shared_match_counts_size=%zu\n", j, shared_match_counts_size);
+                    return;
+                }
+                
+                size_t count_j = shared_match_counts[j].load(std::memory_order_acquire);
+                
                 goto *itemLimitJumpTable_j[count_j];
-                
-            skip_item_j: //ignore this comparisson, it has already have enough 
-                // Element j hat bereits genug Matches, überspringe diesen Vergleich
-                skipped_comparisons++;
-                continue;
-                
-            check_item_j: //proceed to check
-                // Die ID und Daten des zu vergleichenden Elements extrahieren
-                uintptr_t id_j = (uintptr_t)part->data[j][0];
-                const compType* entry_j = reinterpret_cast<compType*>(part->data[j][1]);
-                
-                comparison_count++;
-                
-                // Vergleich durchführen und zum entsprechenden Code springen (0=Match, 1=No Match, 2=Fallback)
-                int result = (*entry_i == *entry_j);
-                goto *jumpTable[result];
-                
-            ismatch:
-                printf("\t [%ld == %ld]\n", i, j);
-                // Eintrag in Puffer erstellen und speichern
-                if (match_count < max_possible_matches) 
-                {
-                    matches[match_count].data[0] = id_i;
-                    matches[match_count].data[1] = id_j;
-                    match_count++;
-                    
-                    // Match-Anzahl für beide Elemente erhöhen
-                    // Überprüfe zuerst, ob das Element bereits genug Matches hat
-                    bool can_increment_i = false;
-                    bool can_increment_j = false;
-                    
-                    // Thread-sichere Inkrementierung mit atomaren Operationen
-                    size_t current_i, current_j;
-                    
-                    // Für Element i
-                    do {
-                        current_i = atomic_match_counts[i].load(std::memory_order_acquire);
-                        if (current_i >= MAX_MATCHES_PER_ITEM) {
-                            can_increment_i = false;
-                            break;  // Bereits genug Matches
-                        }
-                        can_increment_i = atomic_match_counts[i].compare_exchange_strong(
-                            current_i, current_i + 1, std::memory_order_acq_rel);
-                    } while (!can_increment_i); // Wiederholen, falls CAS fehlschlägt
-                    
-                    // Für Element j
-                    do {
-                        current_j = atomic_match_counts[j].load(std::memory_order_acquire);
-                        if (current_j >= MAX_MATCHES_PER_ITEM) {
-                            can_increment_j = false;
-                            break;  // Bereits genug Matches
-                        }
-                        can_increment_j = atomic_match_counts[j].compare_exchange_strong(
-                            current_j, current_j + 1, std::memory_order_acq_rel);
-                    } while (!can_increment_j); // Wiederholen, falls CAS fehlschlägt
-                    
-                    // Debug-Ausgabe, wenn ein Element das Limit erreicht hat
-                    if (!can_increment_i) 
+
+                skip_item_j:
+                    skipped_comparisons++;
+                    continue;
+
+                check_item_j:
+                    if (j >= part->size) 
                     {
-                        DEBUG_MATCH_DETAILED("Element %zu hat das Match-Limit (%d) erreicht\n", i, MAX_MATCHES_PER_ITEM);
+                        fprintf(stderr, "ERROR: j=%zu is out of bounds (part->size=%zu)\n", j, part->size);
+                        return;
                     }
-                    if (!can_increment_j) 
-                    {
-                        DEBUG_MATCH_DETAILED("Element %zu hat das Match-Limit (%d) erreicht\n", j, MAX_MATCHES_PER_ITEM);
+
+                    // Debug: Überprüfe part->data[j][1]
+                
+                    if (part->data[j][1] == 0) {
+                        fprintf(stderr, "ERROR: part->data[%zu][1] is NULL\n", j);
+                        return;
                     }
-                } 
-                else 
-                {
-                    DEBUG_MATCH_IMPORTANT("Warning: Match buffer overflow in match_blocker_intern\n");
-                }
-                continue; // Zum nächsten Element fortfahren
-                
-            nomatch:
-                continue; // Zum nächsten Element fortfahren
-                
-            fallback:
-                printf("\t [%ld ~~ %ld]\n", i, j);
-                // Erweiterter Vergleich für Grenzfälle, bei denen der einfache Vergleich nicht ausreicht
-                // 1. Überprüfe Ähnlichkeit zwischen den Produkten with operator|
-                double similarity = (*entry_i | *entry_j);
-                
-                // 2. Auf Basis der Ähnlichkeit entscheiden
-                if (similarity >= 0.85) // Schwellwert für Ähnlichkeit = 0.85 jaccard index
-                {  
-                    // Als Match behandeln, wenn die Ähnlichkeit hoch genug ist
+
+                    // Debug: Überprüfen Sie die Gültigkeit des compType-Objekts
+                    const compType* debug_entry_j = reinterpret_cast<compType*>(part->data[j][1]);
+                    if (debug_entry_j == nullptr) {
+                        fprintf(stderr, "ERROR: reinterpret_cast<compType*>(part->data[%zu][1]) is NULL\n", j);
+                        return;
+                    }
+
+                    uintptr_t id_j = (uintptr_t)part->data[j][0];
+                    const compType* entry_j = reinterpret_cast<compType*>(part->data[j][1]);
+
+                    comparison_count++;
+
+                    // Sichere Vergleichsoperation mit Fehlerbehandlung
+                    int result = 0;
+                    try {
+                        //hier findet der centrale vergleich statt ===========================================================================================
+                        result = (*entry_i == *entry_j);
+                        // Debug-Ausgabe bei jedem Vergleich (nur in Debug-Builds)
+
+                        // Wenn das Ergebnis außerhalb des gültigen Bereichs liegt
+                        if (result < 0 || result > 2) {
+                            fprintf(stderr, "WARNING: Invalid comparison result: %d (id_i=%zu, id_j=%zu)\n", 
+                                    result, static_cast<size_t>(id_i), static_cast<size_t>(id_j));
+                            result = 0; // Sicherer Fallback auf "kein Match"
+                        }
+                    } catch (...) {
+                        // Fehlerbehandlung für Ausnahmen während des Vergleichs
+                        fprintf(stderr, "ERROR: Exception during comparison (id_i=%zu, id_j=%zu)\n", 
+                                static_cast<size_t>(id_i), static_cast<size_t>(id_j));
+                        result = 0; // Sicherer Fallback auf "kein Match"
+                    }
+
+                    goto *jumpTable[result];
+
+                ismatch:
+                    printf("\t [%zu == %zu]\n", static_cast<size_t>(id_i), static_cast<size_t>(id_j));
                     if (match_count < max_possible_matches) 
                     {
                         matches[match_count].data[0] = id_i;
                         matches[match_count].data[1] = id_j;
                         match_count++;
-                        
-                        // Match-Anzahl für beide Elemente erhöhen
-                        // Überprüfe zuerst, ob das Element bereits genug Matches hat
+
                         bool can_increment_i = false;
                         bool can_increment_j = false;
-                        
-                        // Thread-sichere Inkrementierung mit atomaren Operationen
+
                         size_t current_i, current_j;
-                        
-                        // Für Element i
+
+                        // Für Element i - verwende die Klassenvariable
                         do {
-                            current_i = atomic_match_counts[i].load(std::memory_order_acquire);
+                            current_i = shared_match_counts[i].load(std::memory_order_acquire);
                             if (current_i >= MAX_MATCHES_PER_ITEM) {
                                 can_increment_i = false;
-                                break;  // Bereits genug Matches
+                                break;
                             }
-                            can_increment_i = atomic_match_counts[i].compare_exchange_strong(
+                            can_increment_i = shared_match_counts[i].compare_exchange_strong(
                                 current_i, current_i + 1, std::memory_order_acq_rel);
-                        } while (!can_increment_i); // Wiederholen, falls CAS fehlschlägt
-                        
-                        // Für Element j
+                        } while (!can_increment_i);
+
+                        // Für Element j - verwende die Klassenvariable
                         do {
-                            current_j = atomic_match_counts[j].load(std::memory_order_acquire);
+                            current_j = shared_match_counts[j].load(std::memory_order_acquire);
                             if (current_j >= MAX_MATCHES_PER_ITEM) {
                                 can_increment_j = false;
-                                break;  // Bereits genug Matches
+                                break;
                             }
-                            can_increment_j = atomic_match_counts[j].compare_exchange_strong(
+                            can_increment_j = shared_match_counts[j].compare_exchange_strong(
                                 current_j, current_j + 1, std::memory_order_acq_rel);
-                        } while (!can_increment_j); // Wiederholen, falls CAS fehlschlägt
-                        
-                        // Debug-Ausgabe, wenn ein Element das Limit erreicht hat
-                        if (!can_increment_i) {
-                            DEBUG_MATCH_DETAILED("Element %zu hat das Match-Limit (%d) erreicht (fallback)\n", i, MAX_MATCHES_PER_ITEM);
-                        }
-                        if (!can_increment_j) {
-                            DEBUG_MATCH_DETAILED("Element %zu hat das Match-Limit (%d) erreicht (fallback)\n", j, MAX_MATCHES_PER_ITEM);
-                        }
+                        } while (!can_increment_j);
                     } 
-                    //else 
-                    //{
-                    //    DEBUG_MATCH_IMPORTANT("Warning: Match buffer overflow in match_blocker_intern\n");
-                    //}
+                    continue;
+
+                nomatch:
+                    continue;
+
+                fallback:
+                    printf("\t [%zu ~~ %zu]\n", static_cast<size_t>(id_i), static_cast<size_t>(id_j));
+                    double similarity = (*entry_i | *entry_j);
+
+                    if (similarity >= 0.85)
+                    {  
+                        if (match_count < max_possible_matches) 
+                        {
+                            matches[match_count].data[0] = id_i;
+                            matches[match_count].data[1] = id_j;
+                            match_count++;
+
+                            bool can_increment_i = false;
+                            bool can_increment_j = false;
+
+                            size_t current_i, current_j;
+
+                            // Verwende die Klassenvariable für Element i
+                            while (!can_increment_i)
+                            {
+                                current_i = shared_match_counts[i].load(std::memory_order_acquire);
+                                if (current_i >= MAX_MATCHES_PER_ITEM) {
+                                    can_increment_i = false;
+                                    break;
+                                }
+                                can_increment_i = shared_match_counts[i].compare_exchange_strong(
+                                    current_i, current_i + 1, std::memory_order_acq_rel);
+                            };
+
+                            // Verwende die Klassenvariable für Element j
+                            while (!can_increment_j)
+                            {
+                                current_j = shared_match_counts[j].load(std::memory_order_acquire);
+                                if (current_j >= MAX_MATCHES_PER_ITEM) 
+                                {
+                                    can_increment_j = false;
+                                    break;
+                                }
+                                can_increment_j = shared_match_counts[j].compare_exchange_strong(
+                                    current_j, current_j + 1, std::memory_order_acq_rel);
+                            };
+                        } 
+                    }
+                    continue;
                 }
-                
-                // Sonst: Als No-Match behandeln
-                continue;
-            }
-        }
-        
-        // Statistiken ausgeben
-        //if (skipped_comparisons > 0) {
-        //    DEBUG_MATCH_IMPORTANT("Optimierung: %zu Vergleiche übersprungen (%.1f%% der möglichen Vergleiche)\n", skipped_comparisons, (float)((100.0 * skipped_comparisons) / (range_size * (range_size - 1) / 2)));
-        //}
-        
-        // Keine lokalen Match-Counts mehr zu befreien, nur noch gemeinsamer atomarer Array
+        }   
         
         // Ergebnisse in den findingsBuffer kopieren
         findingsBuffer->size = match_count;
@@ -290,42 +354,47 @@ public:
 
     dataSet<matching>* identify_matches(dataSet<partition>* input, size_t numThreads = 1)
     {
-        // Anzahl der Partitionen bestimmen
+        // Überprüfen der Eingabe
+        if (input == nullptr || input->data == nullptr) {
+            fprintf(stderr, "Error: Invalid input in identify_matches\n");
+            return nullptr;
+        }
+        
         size_t num_partitions = input->size;
+        // Initialisiere den matching_buffer mit Nullen
+        matching* matching_buffer = new matching[num_partitions]();
         
-        // Buffer für die Ergebnisse aller Partitionen erstellen
-        matching* matching_buffer = new matching[num_partitions];
-        
-        // Jede Partition sequentiell verarbeiten
         for(size_t p = 0; p < num_partitions; p++)
         {
+            if (input->data == nullptr) {
+                fprintf(stderr, "Error: Partition data is null at index %zu\n", p);
+                continue;
+            }
+            
             partition* part = &input->data[p];
+            
+            // Sicherstellen, dass die Partitionsgröße gültig ist
+            if (part == nullptr || part->data == nullptr) {
+                matching_buffer[p].size = 0;
+                matching_buffer[p].matches = nullptr;
+                continue;
+            }
+            
             size_t partition_size = part->size;
             
-            // Keine Matches möglich bei zu kleinen Partitionen
             if (partition_size <= 1) {
                 matching_buffer[p].size = 0;
                 matching_buffer[p].matches = nullptr;
                 continue;
             }
             
-            // Bei sehr kleinen Partitionen oder wenn nur 1 Thread gewünscht ist,
-            // direkt ohne Thread-Verwaltung verarbeiten
+            // Shared match counts für diese Partition allokieren und zurücksetzen
+            allocateSharedMatchCounts(partition_size);
+            
             if (partition_size < 50 || numThreads == 1) {
-                // Erstelle einen atomaren Match-Counts-Array auch für die Single-Thread-Version
-                std::atomic<size_t>* single_thread_match_counts = new std::atomic<size_t>[partition_size]();
-                
-                match_blocker_intern(part, 0, partition_size, &matching_buffer[p], single_thread_match_counts);
-                
-                // Freigabe des atomaren Arrays
-                delete[] single_thread_match_counts;
-                
-                DEBUG_MATCH("Partition %zu/%zu verarbeitet: %zu Matches gefunden\n", p+1, num_partitions, matching_buffer[p].size);
+                match_blocker_intern(part, 0, partition_size, &matching_buffer[p]);
                 continue;
             }
-                        
-            // Gemeinsamer, thread-sicherer Match-Counts-Array für alle Threads
-            std::atomic<size_t>* shared_match_counts = new std::atomic<size_t>[partition_size]();
             
             // Array zur Verfolgung von Elementen mit vielen Matches (für Debug-Zwecke)
             std::atomic<bool>* debug_track_high_matches = new std::atomic<bool>[partition_size]();
@@ -335,13 +404,13 @@ public:
             
             // Array für Thread-Positionen erstellen
             size_t* offsets = new size_t[numThreads + 1];
-            offsets[0] = 0;  // Start bei 0
-            offsets[numThreads] = partition_size;  // Ende bei partition_size
+            memset(offsets, 0, sizeof(size_t) * (numThreads + 1));
+            offsets[0] = 0;
+            offsets[numThreads] = partition_size;
             
             // Berechne optimale Schnitte für gleichmäßige Thread-Auslastung (quadratisch)
             size_t completed_comps = 0;
             for (size_t t = 1; t < numThreads; t++) {
-                // Finde Position, bei der die Anzahl der Vergleiche ungefähr gleich ist
                 size_t i = offsets[t-1];
                 
                 while (i < partition_size - 1) 
@@ -349,7 +418,6 @@ public:
                     size_t comps_in_row = partition_size - i - 1;
                     if (completed_comps + comps_in_row >= comparisons_per_thread * t) 
                     {
-                        // Finde optimale Position in dieser Zeile
                         size_t pos_in_row = comparisons_per_thread * t - completed_comps;
                         if (pos_in_row < comps_in_row)
                         {
@@ -364,26 +432,39 @@ public:
             }
             
             // Erstelle Threads und Ergebnispuffer für jeden Thread
-            std::thread** threads = new std::thread*[numThreads];
-            matching* thread_results = new matching[numThreads];
+            std::thread** threads = new std::thread*[numThreads]();  // Mit Nullen initialisieren
+            matching* thread_results = new matching[numThreads]();   // Mit Nullen initialisieren
             
-            // Starte die Threads für die jeweiligen Bereiche
+            // Initialisiere alle Thread-Ergebnisse explizit
+            for (size_t t = 0; t < numThreads; t++) {
+                thread_results[t].size = 0;
+                thread_results[t].matches = nullptr;
+            }
+            
+            // Starte die Threads für die jeweiligen Bereiche - jetzt ohne shared_match_counts als Parameter
             for (size_t t = 0; t < numThreads; t++) 
             {
                 size_t start = offsets[t];
                 size_t end = offsets[t+1];
                 
-                if (start < end) 
+                if (start < end && end <= partition_size)  // Sicherstellen, dass die Grenzen gültig sind
                 {
-                    threads[t] = new std::thread([this, part, start, end, &thread_results, t, numThreads, shared_match_counts]()
+                    // Stellen sicher, dass shared_match_counts direkt als Referenz im Lambda erfasst wird
+                    // um Race Conditions beim Zugriff über 'this' zu vermeiden
+                    std::atomic<size_t>* current_shared_counts = this->shared_match_counts;
+
+                    threads[t] = new std::thread([this, part, start, end, &thread_results, t, numThreads, current_shared_counts]()
                     {
-                        // Thread-ID für Debug-Ausgabe
-                        DEBUG_MATCH_DETAILED("Thread %zu/%zu gestartet: Bereich [%zu-%zu]\n", t+1, numThreads, start, end);
-                        
-                        // Ausführung der eigentlichen Matching-Funktion mit gemeinsamen Match-Counts
-                        match_blocker_intern(part, start, end, &thread_results[t], shared_match_counts);
-                        
-                        DEBUG_MATCH_DETAILED("Thread %zu/%zu beendet: %zu Matches gefunden\n", t+1, numThreads, thread_results[t].size);
+                        // Thread-lokale Kopie von shared_match_counts verwenden
+                        if (part && part->data && current_shared_counts) {
+                            // Sicherstellen, dass shared_match_counts auch im Thread verfügbar ist
+                            this->shared_match_counts = current_shared_counts;
+                            match_blocker_intern(part, start, end, &thread_results[t]);
+                        } else {
+                            fprintf(stderr, "Thread %zu: Invalid parameters\n", t+1);
+                            thread_results[t].size = 0;
+                            thread_results[t].matches = nullptr;
+                        }
                     });
                 } 
                 else 
@@ -397,9 +478,11 @@ public:
                 if (threads[t] && threads[t]->joinable()) {
                     threads[t]->join();
                     delete threads[t];
+                    threads[t] = nullptr;  // Pointer auf null setzen nach dem Löschen
                 }
             }
             delete[] threads;
+            threads = nullptr;
             
             // Ergebnisse zusammenführen
             size_t total_matches = 0;
@@ -410,11 +493,12 @@ public:
             // Ergebnispuffer für die Partition allozieren und Matches zusammenführen
             matching_buffer[p].size = total_matches;
             if (total_matches > 0) {
-                matching_buffer[p].matches = new match[total_matches];
+                matching_buffer[p].matches = new match[total_matches]();  // Mit Nullen initialisieren
                 if (!matching_buffer[p].matches) {
                     fprintf(stderr, "Error: Memory allocation failed in identify_matches\n");
                     delete[] offsets;
                     delete[] thread_results;
+                    freeSharedMatchCounts();  // Shared match counts freigeben vor dem Beenden
                     exit(1);
                 }
                 
@@ -435,52 +519,45 @@ public:
                 matching_buffer[p].matches = nullptr;
             }
             
-            DEBUG_MATCH("Partition %zu/%zu verarbeitet: %zu Matches gefunden (mit %zu Threads)\n", 
-                   p+1, num_partitions, matching_buffer[p].size, numThreads);
+           
             
             // Statistik über die Verteilung der Matches ausgeben
             size_t max_matches = 0;
             size_t elements_at_limit = 0;
-            size_t histogram[MAX_MATCHES_PER_ITEM+1] = {0}; // Histogramm der Match-Anzahlen
+            size_t histogram[MAX_MATCHES_PER_ITEM+1] = {0};
             
-            for (size_t i = 0; i < partition_size; i++) {
-                size_t count = shared_match_counts[i].load(std::memory_order_relaxed);
-                max_matches = std::max(max_matches, count);
-                if (count == MAX_MATCHES_PER_ITEM) {
-                    elements_at_limit++;
+            // Sicherheitscheck, ob shared_match_counts noch gültig ist
+            if (shared_match_counts ) 
+            {
+                // Überprüfe ob shared_match_counts_size gültig ist
+                if (partition_size > shared_match_counts_size) 
+                {
+                    partition_size = shared_match_counts_size; // Auf sichere Größe begrenzen
                 }
                 
-                // Histogramm aktualisieren
-                if (count <= MAX_MATCHES_PER_ITEM) {
-                    histogram[count]++;
-                }
-                
-                // Elemente mit sehr vielen Matches identifizieren (mehr als erwartet)
-                if (count > MAX_MATCHES_PER_ITEM) {
-                    DEBUG_MATCH_IMPORTANT("Element %zu hat %zu Matches (über dem Limit von %d)\n", 
-                                       i, count, MAX_MATCHES_PER_ITEM);
+                for (size_t i = 0; i < partition_size; i++) {
+                    // Sicheres Laden des Wertes
+                    size_t count = shared_match_counts[i].load(std::memory_order_acquire);
+                    
+                    max_matches = std::max(max_matches, count);
+                    if (count == MAX_MATCHES_PER_ITEM) {
+                        elements_at_limit++;
+                    }
+                    
+                    if (count <= MAX_MATCHES_PER_ITEM) {
+                        histogram[count]++;
+                    }
                 }
             }
-            
-            // Ausgabe der Statistik
-            DEBUG_MATCH("Match-Statistik für Partition %zu:\n", p+1);
-            DEBUG_MATCH("- Max Matches pro Element: %zu\n", max_matches);
-            DEBUG_MATCH("- Elemente am Limit (%d): %zu von %zu (%.1f%%)\n", 
-                       MAX_MATCHES_PER_ITEM, elements_at_limit, partition_size, 
-                       100.0 * elements_at_limit / partition_size);
-            
-            // Histogramm ausgeben
-            for (size_t i = 0; i <= MAX_MATCHES_PER_ITEM; i++) {
-                DEBUG_MATCH("  - Elemente mit %zu Matches: %zu (%.1f%%)\n", 
-                          i, histogram[i], 100.0 * histogram[i] / partition_size);
-            }
-            
+
             // Aufräumen
             delete[] offsets;
             delete[] thread_results;
-            delete[] shared_match_counts;
             delete[] debug_track_high_matches;
         }
+        
+        // Zum Schluss die Klassenvariable freigeben
+        freeSharedMatchCounts();
         
         // Ergebnisse in dataSet verpacken
         dataSet<matching>* result = new dataSet<matching>();

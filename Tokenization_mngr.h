@@ -221,6 +221,24 @@ public:
         memset(m_class_tokens_found, 0, sizeof(m_class_tokens_found));
     }
 
+    ~Tokenization_mngr() 
+    {
+        // Clean up all loaded shared libraries
+        for (void* handle : hSoFile) {
+            if (handle) {
+                dlclose(handle);
+            }
+        }
+        
+        // Clear vectors
+        hSoFile.clear();
+        tokenizers.clear();
+        template_type_str.clear();
+        
+        // Note: The token_node classes array will be automatically cleaned up
+        // through its own destructors when this object is destroyed
+    }
+
     Tokenization_mngr(std::vector<std::string> template_types,const category priority[N])
     {
         this->m_tokenizer_mngr_id = numTokenizers++;
@@ -238,7 +256,7 @@ public:
     {
         printf("importing file: %s\n", filename.c_str());
         size_t ret = classes[tk].fimport_token(filename.c_str());
-        this->m_class_tokens_found[tk] = ret > 0 ? ret - 1 : 0;
+        this->m_class_tokens_found[tk] += ret > 0 ? ret - 1 : 0;
         printf("found %zu unique tokens for klass %d\n",this->m_class_tokens_found[tk],tk);
         classes[tk].print();
         return true;     
@@ -249,7 +267,7 @@ public:
     {
         printf("importing file: %s with parent category %d\n", filename.c_str(), parent_tk);
         size_t ret = classes[tk].fimport_token(filename.c_str());
-        this->m_class_tokens_found[tk] = ret > 0 ? ret - 1 : 0;
+        this->m_class_tokens_found[tk] += ret > 0 ? ret - 1 : 0;
         printf("found %zu unique tokens for klass %d with parent %d\n", 
                this->m_class_tokens_found[tk], tk, parent_tk);
         classes[tk].print();
@@ -295,7 +313,9 @@ public:
             printf("Attaching Buffer %zu of size %zu to dataSet[%zu]\n", t, block_size, current);
             memcpy(&ret->data[current], thread_buffer[t], block_size * sizeof(out_buf_t));
             current += block_size;
+            delete[] thread_buffer[t];
         }
+        delete[] thread_buffer;
         return ret;
     }
 
@@ -342,7 +362,13 @@ public:
                     m_num_class_tokens_found[i]++; // 
                     // Speicher den Index des gefundenen Tokens
                     //printf("\t\twriting to: %p\n",&buffer[i]);
+                    token old_value = ((token*)buffer)[i];
                     ((token*)buffer)[i] = index; //*(laptop*->token**) -> token* [i] -> token
+                    
+                    // Inkrementiere token_count nur, wenn vorher kein Token an dieser Stelle war
+                    if (old_value == 0) {
+                        buffer->token_count++;
+                    }
 
                     // p um die Länge des gefundenen Tokens weiterschieben
                     while (*p && *p!=whitespace)
@@ -368,6 +394,22 @@ public:
             &&loop, &&loop, &&eol, &&loop, &&loop, &&loop, &&loop, &&loop,             // 8–15
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 16–23
             &&loop_whitespace, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, // 24–31
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 32–39
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 40–47
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 48–55
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 56–63
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 64–71
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 72–79
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 80–87
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 88–95
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 96–103
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 104–111
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 112–119
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 120–127
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 0–7
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 8–15
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 16–23
+            &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 24–31
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 32–39
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 40–47
             &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop, &&loop,            // 48–55
