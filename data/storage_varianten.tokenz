@@ -1,0 +1,4 @@
+sdhc;microsdhc
+sdxc;microsdxc
+sdsc
+sduc,microsduc

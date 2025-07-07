@@ -1,0 +1,9 @@
+--dell
+g5
+g7
+g9
+inspiron
+latitude
+precision
+vostro
+xps

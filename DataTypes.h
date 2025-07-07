@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <cstdio>
 #include "debug_utils.h"
+#include <set>
 
 #ifndef DUPLICATE_DETECTION_DATATYPES
 #define DUPLICATE_DETECTION_DATATYPES
@@ -177,6 +178,8 @@ struct laptop
     size_t token_count; // Anzahl der Tokens mit Informationen (> 0)
     size_t id;
     char * description; // Pointer auf eine Zeichenkette, die die Beschreibung des Laptops enthält
+    uint32_t* numeral_buffer; //dont forget to link this before comparing
+    uint32_t numNumerals = 0;
 
     void print() const
     {
@@ -227,15 +230,14 @@ struct laptop
                 &&checkComp,
                 &&checkComp,
                 &&checkComp,
+                &&checkComp,
+                &&checkComp,
                 &&foundIdentical,
                 &&foundIdentical,
                 &&foundIdentical,
                 &&foundIdentical,
                 &&foundIdentical,
-                &&foundIdentical,
-                &&foundIdentical,
-                &&foundIdentical
-            };
+                &&foundIdentical};
 
         const void *jumptableUNKNOWN[] =
         {
@@ -272,7 +274,7 @@ struct laptop
         char c = assembler_brand; // Start with first category
         char equal = 0;
         char different = 0;
-        const char required = 3;
+        const char required = 0;
 
     checkComp:
         // Check if we've gone beyond the valid categories
@@ -316,9 +318,167 @@ struct laptop
         return 1;
     }
 
-    double operator | (const laptop& other) const  //implementiere eine Vergleichsfunktion basierend auf djakar
+    double operator|(const laptop &other) const
     {
-        //high speed jaccard simmilarity von den descriptoren (hier ein char*)
+        //make sure, that before using this, we link the numeral_buf to a uint32_t[<size>] with size being big enough to hold approx 200 maybe more in the worst case. 
+        //have one buffer for each object we compare (so in each thread we need 2 in total)
+
+        auto processString = [&](char *str, laptop* obj)
+        {
+            char *p = str;
+            int tokenValue = 0;
+
+            const void *jumpTableLoop[256] = 
+            {
+                &&eol, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 0–7
+                &&stn, &&stn, &&eol, &&stn, &&stn, &&stn, &&stn, &&stn,             // 8–15
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 16–23
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, // 24–31
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 32–39
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 40–47
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 48–55
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 56–63
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 64–71
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 72–79
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 80–87
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 88–95
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 96–103
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 104–111
+                &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,            // 112–119
+                &&stn, &&stn, &&stn, &&stn, &&loop_whitespace, &&stn, &&stn, &&stn, // 120–127
+            };
+
+            const void *jumpTableFound8[256] =
+            {
+                &&eol, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 0–7
+                &&gt1char, &&gt1char, &&eol, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 8–15
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 16–23
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 24–31
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 32–39
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 40–47
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 48–55
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 56–63
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 64–71
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 72–79
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 80–87
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 88–95
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 96–103
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 104–111
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,             // 112–119
+                &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&sChar, &&gt1char, &&gt1char, &&gt1char, // 120–127
+            };
+
+            const void *jumpTableFound16[256] =
+            {
+                &&eol, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 0–7
+                &&ge2char, &&ge2char, &&eol, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 8–15
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 16–23
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 24–31
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 32–39
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 40–47
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 48–55
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 56–63
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 64–71
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 72–79
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 80–87
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 88–95
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 96–103
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 104–111
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,             // 112–119
+                &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&sShort, &&ge2char, &&ge2char, &&ge2char, // 120–127
+            };
+
+            const void *jumpTableFound24[256] =
+            {
+                    &&eol, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 0–7
+                    &&sIntL, &&sIntL, &&eol, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 8–15
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 16–23
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 24–31
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 32–39
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 40–47
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 48–55
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 56–63
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 64–71
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 72–79
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 80–87
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 88–95
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 96–103
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 104–111
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 112–119
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&ssShort, &&sIntL, &&sIntL, &&sIntL, // 120–127
+            };
+
+            const void *jumpTableIntLoop[256] =
+                {
+                    &&eol, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 0–7
+                    &&sIntL, &&sIntL, &&eol, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 8–15
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 16–23
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 24–31
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 32–39
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 40–47
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 48–55
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 56–63
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 64–71
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 72–79
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 80–87
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 88–95
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 96–103
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 104–111
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 112–119
+                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&loop_whitespace, &&sIntL, &&sIntL, &&sIntL, // 120–127
+                };
+
+            goto *jumpTableLoop[*p];
+            uint32_t numeral;
+                //_|_|_|c-c-c-c ... |
+
+            stn :
+                // save current destination
+                char *pos = p;
+                char roffset = 0;
+                goto *jumpTableFound8[*(++p)]; // if the next char after dest is a whitespace, jump to save char, to only save one char in a number
+            gt1char: //otherwise we will land here
+                goto *jumpTableFound16[*(++p)]; //if the 2nd byte after dst is a whitespace, jump to sShort for we got at least 2 letters we will take as 1 int with 16bit offset
+            ge2char: //otherwise we will land here
+                goto *jumpTableFound24[*(++p)]; //if the 3rd byte after dst is a whitespace, jump to ssShort for we got 3 letters we will take as 1 int with 8 bit offset
+            sIntL: //otherwise we got 4 or more letters in a row, therefor we loop_saveInt
+                numeral = *((uint32_t*)pos); //get numeral at pos and increment pos for next possible step to be in a different position
+                pos++;
+                obj->numeral_buffer[obj->numNumerals] = numeral; //save numeral to buffer
+                obj->numNumerals++; //increment number of numerals for correct saving location and later work
+                goto *jumpTableIntLoop[*(++p)]; //if the next byte is also not a whitespace, will land back here, otherwise will loop whitespace 
+            
+            sChar:
+                roffset = 24; //have a 24 offset ready for shift, and jump to save as integer;
+                goto sInt;
+            sShort: //save 2 byte in an integer by offsetting the current data >> 16
+                roffset = 16;
+                goto sInt;
+            ssShort: //save 3 byte in an int by offsetting the current data >> 8
+                roffset = 8;
+                goto sInt;
+            sInt:
+                numeral = *((uint32_t*)pos);
+                uint32_t onumeral = numeral >> roffset; //get data at destination for exactly the filed bytes we need
+                obj->numeral_buffer[obj->numNumerals] = (uint32_t)onumeral;  //save the shifted numeral 
+                obj->numNumerals++;// increase for correct save location
+                goto loop_whitespace;
+                                
+            loop_whitespace:
+                ++p;
+                goto *jumpTableLoop[*p];
+
+            eol:
+            return;
+        };
+
+        //our tokens are now in this->numeral_buffer and other. numeral buffer
+        //count the tokens we got all together, by merging the lists without duplicates;
+        //count the tokens we got in common in both lists, without duplicates;
+        //divide : (number of common tokens) by (number of all distinct tokens)
+        
+
+        return 0.0;
     }
 
     // Qualitätsindex-Funktion
@@ -362,6 +522,8 @@ struct storage_drive
     size_t token_count = 0;                   // Anzahl der Tokens mit Informationen (> 0)
     size_t id = 0;
     quintupel* descriptor = nullptr;
+    uint32_t *numeral_buffer; // dont forget to link this before comparing
+    uint32_t numNumerals = 0;
 
     void print() const
     {
@@ -415,8 +577,8 @@ struct storage_drive
                 &&checkComp,
                 &&checkComp,
                 &&checkComp,
-                &&foundIdentical,
-                &&foundIdentical,
+                &&checkComp,
+                &&checkComp,
                 &&foundIdentical,
                 &&foundIdentical,
                 &&foundIdentical,
@@ -458,7 +620,7 @@ struct storage_drive
                 &&useFallBack};
         char c = assembler_brand; // Start with first category
         char equal = 0;
-        const char required = 3;
+        const char required = 0;
 
     checkComp:
         // Check if we've gone beyond the valid categories
@@ -502,10 +664,63 @@ struct storage_drive
         return 1;
     }
 
-    double operator|(const storage_drive &other) const // implementiere eine Vergleichsfunktion basieren auf einer anderen Metrik als dem Direkten tokenvergleich.
+    double operator|(const storage_drive &other) const
     {
-        // high speed jaccard simmilarity von den descriptoren (hier ein quintupel, felder mit index 0 2 3 4 sind strings, dafür nutzbar denke ich 0 und 3)
-        return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
+        // Wenn einer der Deskriptoren nicht existiert, return 0
+        if (!descriptor || !other.descriptor) {
+            return 0.0;
+        }
+        
+        // Array für alle String-Felder der Deskriptoren
+        const size_t str_indices[] = {0, 2, 3, 4};  // Indizes der String-Felder im quintupel
+    
+        // Wir werden alle Strings zusammenfügen und dann den Jaccard-Index berechnen
+        const size_t max_hashes = 4096;
+        uint64_t this_hashes[64] = {0};
+        uint64_t other_hashes[64] = {0};
+    
+        // Verarbeite alle Strings im ersten Deskriptor
+        for (size_t idx : str_indices) {
+            const char* str = reinterpret_cast<const char*>(descriptor->data[idx]);
+            if (str) {
+                const size_t len = strlen(str);
+                
+                // Direkter Cast von Byte-Paaren zu uint16_t für den Hash
+                for (size_t i = 0; i < len - 1; i++) {
+                    uint16_t byte_pair = static_cast<uint16_t>((static_cast<unsigned char>(str[i]) << 8) | 
+                                                               static_cast<unsigned char>(str[i+1]));
+                    size_t hash = byte_pair % max_hashes;
+                    this_hashes[hash / 64] |= (1ULL << (hash % 64));
+                }
+            }
+        }
+        
+        // Verarbeite alle Strings im zweiten Deskriptor
+        for (size_t idx : str_indices) {
+            const char* str = reinterpret_cast<const char*>(other.descriptor->data[idx]);
+            if (str) {
+                const size_t len = strlen(str);
+                
+                for (size_t i = 0; i < len - 1; i++) {
+                    uint16_t byte_pair = static_cast<uint16_t>((static_cast<unsigned char>(str[i]) << 8) | 
+                                                               static_cast<unsigned char>(str[i+1]));
+                    size_t hash = byte_pair % max_hashes;
+                    other_hashes[hash / 64] |= (1ULL << (hash % 64));
+                }
+            }
+        }
+    
+        // Berechne Schnittmenge und Vereinigungsmenge
+        size_t intersection_count = 0;
+        size_t union_count = 0;
+    
+        for (size_t i = 0; i < 64; i++) {
+            intersection_count += __builtin_popcountll(this_hashes[i] & other_hashes[i]);
+            union_count += __builtin_popcountll(this_hashes[i] | other_hashes[i]);
+        }
+    
+        // Berechne den Jaccard-Index
+        return union_count > 0 ? static_cast<double>(intersection_count) / union_count : 0.0;
     }
 
     // Qualitätsindex-Funktion

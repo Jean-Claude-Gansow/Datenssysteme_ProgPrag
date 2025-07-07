@@ -11,12 +11,6 @@
 #include "DataTypes.h"
 #include "debug_utils.h"
 
-// Konfigurierbare Konstanten
-// Maximale Anzahl von Matches, die für ein Element gesucht werden
-// Höherer Wert = mehr Matches pro Element werden gefunden, aber langsamere Ausführung
-// Niedrigerer Wert = schnellere Ausführung, aber möglicherweise weniger Matches pro Element
-#define MAX_MATCHES_PER_ITEM 3
-
 template<typename compType>
 class Matching_mngr {
 private:
@@ -46,11 +40,9 @@ public:
             return;
         }
         
-        // Jump-Table für die verschiedenen Ergebnisse
-        static void *jumpTable[3] = {
-            &&nomatch, &&ismatch, &&fallback
-        };
-        
+        uint32_t numeral_buffer1[200];
+        uint32_t numeral_buffer2[200];
+
         // Maximale Kapazität des Buffers berechnen
         size_t range_size = end - start;
         size_t max_possible_matches = (range_size * (range_size - 1)) / 2;
@@ -62,64 +54,31 @@ public:
         // Debug-Zähler
         size_t comparison_count = 0;
         
-        // Hauptschleife für Vergleiche - keine Überprüfung auf MAX_MATCHES_PER_ITEM mehr
-        for (size_t i = start; i < end; i++) {
-            // Validierung des Eintrags
-            if (!part->data[i][1]) {
-                fprintf(stderr, "Warning: Entry at index %zu is NULL, skipping\n", i);
-                continue;
-            }
-            
+        // Hauptschleife für Vergleiche - nur | Operator
+        for (size_t i = start; i < end; i++) 
+        {            
             uintptr_t id_i = (uintptr_t)part->data[i][0];
-            const compType* entry_i = reinterpret_cast<compType*>(part->data[i][1]);
+            compType* entry_i = reinterpret_cast<compType*>(part->data[i][1]);
             
             // Vergleiche mit allen nachfolgenden Einträgen
             for (size_t j = i + 1; j < end; ++j) {
-                // Validierung des zu vergleichenden Eintrags
-                if (!part->data[j][1]) {
-                    fprintf(stderr, "Warning: Entry at index %zu is NULL, skipping\n", j);
-                    continue;
-                }
                 
                 uintptr_t id_j = (uintptr_t)part->data[j][0];
-                const compType* entry_j = reinterpret_cast<compType*>(part->data[j][1]);
-                
+                compType* entry_j = reinterpret_cast<compType*>(part->data[j][1]);
+
                 comparison_count++;
-                
-                // Sichere Vergleichsoperation
-                int result = 0;
-                try {
-                    result = (*entry_i == *entry_j);
-                    if (result < 0 || result > 2) {
-                        result = 0; // Sicherer Fallback
-                    }
-                } catch (...) {
-                    result = 0; // Sicherer Fallback bei Ausnahmen
-                }
-                
-                goto *jumpTable[result];
-                
-            ismatch:
-                // Match speichern - ohne Begrenzung pro Element
-                if (match_count < max_possible_matches) {
+
+                entry_i->numeral_buffer = numeral_buffer1;
+                entry_j->numeral_buffer = numeral_buffer1;
+
+                if ((*entry_i | *entry_j) >= 0.85 && match_count < max_possible_matches)
+                {
+                    // Match speichern
                     matches[match_count].data[0] = id_i;
                     matches[match_count].data[1] = id_j;
                     match_count++;
                 }
-                continue;
                 
-            nomatch:
-                continue;
-                
-            fallback:
-                double similarity = (*entry_i | *entry_j);
-                if (similarity >= 0.85 && match_count < max_possible_matches) {
-                    // Match speichern - ohne Begrenzung pro Element
-                    matches[match_count].data[0] = id_i;
-                    matches[match_count].data[1] = id_j;
-                    match_count++;
-                }
-                continue;
             }
         }
         

@@ -1,0 +1,6 @@
+--asus
+expertbook
+rog
+tuf
+vivobook
+zenbook

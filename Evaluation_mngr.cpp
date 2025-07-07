@@ -1,7 +1,7 @@
 //
 // Created by Jean-Claude on 19.05.2025.
 //
-
+#include <vector>
 #include "Evaluation_mngr.h"
 
 float Evaluation_mngr::evaluateMatches(dataSet<matching>* matches, dataSet<match>* Solution)
@@ -22,19 +22,16 @@ float Evaluation_mngr::evaluateMatches(dataSet<matching>* matches, dataSet<match
         }
     }
     
+    // Debugging-Informationen
+    printf("Ground-Truth-Größe: %zu\n", Solution->size);
+    printf("Anzahl verarbeiteter Matches: %zu\n", total_matches);
+    printf("Maximale gefundene ID: %zu\n", max_id);
+    
     // Erstelle einen Puffer für die indizierten Matches
-    size_t buffer_size = max_id + 1; // +1 weil IDs bei 1 starten können
-    size_t* num_matches = new size_t[buffer_size];
-    size_t** indexed_matches = new size_t*[buffer_size];
-
-    // Initialisiere das num_matches-Array
-    memset(num_matches, 0, buffer_size * sizeof(size_t));
-
-    // Erstelle den Puffer für alle Matches an den zugehörigen ersten ID-Indizes
-    for (size_t i = 0; i < buffer_size; i++) {
-        indexed_matches[i] = new size_t[threshhold];
-        memset(indexed_matches[i], 0, threshhold * sizeof(size_t));
-    }
+    size_t buffer_size = max_id + 1;
+    
+    // Verwende Vektoren statt fester Arrays, um eine dynamische Anzahl von Matches zu unterstützen
+    std::vector<std::vector<size_t>> indexed_matches(buffer_size);
     
     // Befülle den Puffer mit allen Matches aus allen Partitionen
     for (size_t p = 0; p < matches->size; p++) {
@@ -44,15 +41,14 @@ float Evaluation_mngr::evaluateMatches(dataSet<matching>* matches, dataSet<match
             size_t id1 = static_cast<size_t>(partition_matches.matches[m].data[0]);
             size_t id2 = static_cast<size_t>(partition_matches.matches[m].data[1]);
             
-            if (id1 > 0 && id1 < buffer_size && num_matches[id1-1] < threshhold) {
-                indexed_matches[id1-1][num_matches[id1-1]] = id2; // Sortiere Matches nach dem entsprechenden Index
-                num_matches[id1-1]++;
+            // Keine Begrenzung mehr durch threshhold
+            if (id1 < buffer_size) {
+                indexed_matches[id1].push_back(id2);
             }
         }
     }
 
     // Überprüfe, ob jedes Lösungs-Match in unseren vorhergesagten Matches existiert
-    // Zähle true positives (TP), false positives (FP) und false negatives (FN)
     size_t true_positives = 0;
     size_t false_negatives = 0;
     
@@ -60,12 +56,12 @@ float Evaluation_mngr::evaluateMatches(dataSet<matching>* matches, dataSet<match
         size_t solution_id1 = static_cast<size_t>((*Solution)[i].data[0]);
         size_t solution_id2 = static_cast<size_t>((*Solution)[i].data[1]);
         
-        if (solution_id1 < buffer_size) 
-        {
+        if (solution_id1 < buffer_size) {
             bool found = false;
-            for (size_t j = 0; j < num_matches[solution_id1-1]; j++) {
-                if (indexed_matches[solution_id1-1][j] == solution_id2) {
-                    indexed_matches[solution_id1-1][j] = 0; // Als gefunden markieren (true positive)
+            for (size_t j = 0; j < indexed_matches[solution_id1].size(); j++) {
+                if (indexed_matches[solution_id1][j] == solution_id2) {
+                    // Als gefunden markieren, aber nicht löschen - wir merken uns nur die Position
+                    indexed_matches[solution_id1][j] = 0;
                     true_positives++;
                     found = true;
                     break;
@@ -73,17 +69,17 @@ float Evaluation_mngr::evaluateMatches(dataSet<matching>* matches, dataSet<match
             }
             
             if (!found) {
-                false_negatives++; // Lösungs-Match nicht in unseren vorhergesagten Matches gefunden
+                false_negatives++;
             }
         } else {
-            false_negatives++; // Lösungs-ID nicht im Bereich unserer vorhergesagten Matches
+            false_negatives++;
         }
     }
     
     // Zähle verbleibende Nicht-Null-Einträge als false positives
     size_t false_positives = 0;
     for (size_t i = 0; i < buffer_size; i++) {
-        for (size_t j = 0; j < num_matches[i]; j++) {
+        for (size_t j = 0; j < indexed_matches[i].size(); j++) {
             if (indexed_matches[i][j] != 0) {
                 false_positives++;
             }
@@ -114,13 +110,6 @@ float Evaluation_mngr::evaluateMatches(dataSet<matching>* matches, dataSet<match
     printf("  - Precision: %.4f\n", precision);
     printf("  - Recall: %.4f\n", recall);
     printf("  - F1-Score: %.4f\n", f1_score);
-    
-    // Gib den zugewiesenen Speicher frei
-    for (size_t i = 0; i < buffer_size; i++) {
-        delete[] indexed_matches[i];
-    }
-    delete[] indexed_matches;
-    delete[] num_matches;
     
     return f1_score;
 }

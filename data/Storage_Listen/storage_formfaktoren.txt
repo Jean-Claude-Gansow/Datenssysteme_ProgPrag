@@ -1,0 +1,11 @@
+cf;cf card;cfcard
+cfast
+compact flash;compactflash
+flash drive;flashdrive;fdrive
+hdd;hard disk drive;harddiskdrive
+memory card;memorycard
+micro sd;microsd;microsdx
+pen drive;pendrive
+sd;sd card;sd karte;sdkarte;sdcard
+ssd
+usb stick;usbstick

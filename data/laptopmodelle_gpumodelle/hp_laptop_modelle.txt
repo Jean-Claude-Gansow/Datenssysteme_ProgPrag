@@ -1,0 +1,8 @@
+--hp
+elitebook
+envy
+omen
+pavilion
+probook
+spectre
+zbook

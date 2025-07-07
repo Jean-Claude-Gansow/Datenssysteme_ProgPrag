@@ -56,7 +56,15 @@
     "thread": "cpp",
     "typeinfo": "cpp",
     "map": "cpp",
-    "cinttypes": "cpp"
+    "cinttypes": "cpp",
+    "charconv": "cpp",
+    "chrono": "cpp",
+    "condition_variable": "cpp",
+    "set": "cpp",
+    "format": "cpp",
+    "mutex": "cpp",
+    "span": "cpp",
+    "variant": "cpp"
   },
   "C_Cpp.default.includePath": [
     "${workspaceFolder}/**",

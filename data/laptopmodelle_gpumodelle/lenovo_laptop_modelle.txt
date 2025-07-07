@@ -1,0 +1,8 @@
+--Lenovo
+ideapad
+legion
+legion pro
+thinkbook
+thinkpad
+v110
+yoga

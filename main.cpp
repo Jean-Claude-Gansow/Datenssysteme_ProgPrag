@@ -19,12 +19,21 @@
 #include "FileInput.h"
 #include "DataTypes.h"
 
+/*std::string files[] =
+{
+    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k.csv",
+    "../data/Test_Datasets/Storage_Test-Datasets/storage_600k.csv",
+    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k_loesungen.csv",
+    "../data/Test_Datasets/Storage_Test-Datasets/storage_600k_loesungen.csv"
+};*/
+
 std::string files[] =
-    {
-        "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k.csv",
-        "../data/Test_Datasets/Storage_Test-Datasets/storage_600k.csv",
-        "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k_loesungen.csv",
-        "../data/Test_Datasets/Storage_Test-Datasets/storage_600k_loesungen.csv"};
+{
+    "../data/Z1.csv",
+    "../data/Z2.csv",
+    "../data/ZY1.csv",
+    "../data/ZY2.csv"
+};
 
 // Die Funktion ist jetzt in debug_utils.h definiert
 
@@ -64,8 +73,8 @@ int main(int argc, char** argv)
     //rom_capacity: 3
     //
 
-    std::vector<category> laptop_partition_hierarchy = {assembler_brand, assembler_modell, cpu_brand, cpu_fam};
-    std::vector<category> storage_partition_hierarchy = {assembler_brand, assembler_modell, rom_capacity};
+    std::vector<category> laptop_partition_hierarchy = {assembler_brand};
+    std::vector<category> storage_partition_hierarchy = {assembler_brand};
     //TODO: Listenbäume aufbauen. Format: Token;Token;Token;...Token\n -> index = line
     //TODO: Listen zuusammenführen -> Klassenindices können erst dann korrekt gebaut werden.
     m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_marken.tokenz",assembler_brand); //laptop brand

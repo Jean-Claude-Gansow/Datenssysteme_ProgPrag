@@ -1,0 +1,7 @@
+pata;ide
+thunderbolt;thunderbolt 1;thunderbolt 2;thunderbolt 3;thunderbolt 4;thunderbolt1;thunderbolt2;thunderbolt3;thunderbolt4
+firewire
+ieee 1394;ieee1394
+lightning
+expresscard
+cfexpress

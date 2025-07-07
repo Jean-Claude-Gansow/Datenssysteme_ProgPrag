@@ -1,0 +1,8 @@
+--msi
+creator
+modern
+m15
+m16
+m17
+pulse
+stealth
