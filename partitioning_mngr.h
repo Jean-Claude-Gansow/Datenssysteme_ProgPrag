@@ -1,391 +1,661 @@
 #ifndef PARTITIONING_MNGR_H
 #define PARTITIONING_MNGR_H
 
-#include <vector>
 #include <cstdlib>
 #include <cstring>
-#include <map>
-#include <set>
+#include <cstdarg>
+#include <algorithm>
+#include <random>
+#include <chrono>
+#include <iomanip>
 #include "DataTypes.h"
 #include "Tokenization_mngr.h"
 
-// Annahme: InType hat operator[](size_t) für Tokenzugriff
+/**
+ * @brief Baumknoten für hierarchische Partitionierung mit separater Partition für Einträge ohne Information
+ */
+struct PartitionNode {
+    partition_t data;              // Hauptpartition mit Einträgen, die Token-Information haben
+    partition_t no_info;           // Separate Partition für Einträge ohne Token-Information
+    PartitionNode** children;      // Kinder-Knoten
+    size_t child_count;            // Anzahl der Kinder
+    
+    PartitionNode(const partition_t& p) : data(p), children(nullptr), child_count(0) {
+        no_info.data = nullptr;
+        no_info.size = 0;
+        no_info.capacity = 0;
+    }
+    
+    ~PartitionNode() {
+        if (children) {
+            for (size_t i = 0; i < child_count; i++) {
+                delete children[i];
+            }
+            delete[] children;
+        }
+        
+        if (no_info.data) {
+            delete[] no_info.data;
+        }
+    }
+};
+
+
 template <typename base_type, typename InType, size_t N>
 class Partitioning_mngr 
 {
 public:
     using Tokenizer = Tokenization_mngr<N, base_type, InType>;
 
-    Partitioning_mngr(size_t threshhold)
-    {
-        this->size_threshhold = threshhold;
-        printf("Setting size threshold for partitioning to %zu\n", this->size_threshhold);
+    // Konfigurationsparameter
+    struct Config {
+        size_t size_threshold = 2000;     // Maximale Partitionsgröße
+        bool verbose_logging = false;     // Detaillierte Ausgaben aktivieren
+        double overlap_ratio = 0.5;       // 50% Überlappung bei finaler Aufteilung
+        size_t min_token_count = 0;       // Minimale Anzahl von Token-Informationen
+    };
+
+    // Konstruktor
+    explicit Partitioning_mngr(const Config& config = Config()) : config(config) {
+        printf("Partitioning_mngr initialisiert mit Schwellwert %zu, Min-Token-Count %zu\n", 
+               config.size_threshold, config.min_token_count);
     }
 
-    // Wrapper-Funktion, die das Eingabe-Dataset in ein Dataset von Partitionen umwandelt
-    dataSet<partition_t>* create_partitions(dataSet<InType>* input_data, Tokenizer* tokenizer, const std::vector<category>& class_hierarchy) {
-        printf("Creating partitions for dataset with %zu elements\n", input_data->size);
+    /**
+     * @brief Erstellt hierarchische Partitionen aus einem Datensatz
+     */
+    dataSet<partition_t>* create_partitions(
+        dataSet<InType>* input_data, 
+        Tokenizer* tokenizer, 
+        const std::vector<category>& categories) 
+    {
+        auto start_time = std::chrono::high_resolution_clock::now();
         
-        // Wenn die Hierarchie leer ist oder die Daten unter dem Threshold liegen
-        if (class_hierarchy.empty() || input_data->size <= size_threshhold) 
-        {
-            // Erstelle eine einzelne Partition mit allen Daten
-            partition_t single_partition;
-            single_partition.size = input_data->size;
-            single_partition.capacity = input_data->size;
-            single_partition.data = new pair[input_data->size];
-            
-            // Fülle die Partition mit Paaren (Index, Pointer)
-            for (size_t i = 0; i < input_data->size; i++) 
-            {
-                single_partition.data[i][0] = (uintptr_t)i;                   // Index
-                single_partition.data[i][1] = (uintptr_t)&input_data->data[i]; // Pointer
-            }
-            
-            // Erstelle das Rückgabe-Dataset und initialisiere es mit der einzelnen Partition
-            dataSet<partition_t>* result = new dataSet<partition_t>();
-            result->size = 1;
-            result->data = new partition_t[1];
-            result->data[0] = single_partition;
-            
-            return result;
+        printf("🔍 Partitionierung: Beginne mit %zu Einträgen und %zu Kategorien...\n", 
+               input_data->size, categories.size());
+        
+        if (!input_data || input_data->size == 0) {
+            return createEmptyPartitionSet();
         }
         
-        // Sammlung aller erzeugten Partitionen
-        std::vector<partition_t> all_partitions;
+        if (input_data->size <= config.size_threshold) {
+            return createSinglePartition(input_data);
+        }
+
+        printf("🔍 Erstelle gefilterte Basispartition (min. %zu Tokens)...\n", config.min_token_count);
+        partition_t base_partition = createBasePartition(input_data);
         
-        // Erstelle zunächst die Trash-Partitionen für Einträge mit wenigen Tokens
-        partition_t trash_0, trash_1, trash_2;
-        createTrashPartitions(input_data, trash_0, trash_1, trash_2);
+        printf("🔍 Starte hierarchische Partitionierung mit %zu Kategorien...\n", categories.size());
+        printf("   Kategoriereihenfolge: ");
+        for (size_t i = 0; i < categories.size(); i++) {
+            printf("%d", categories[i]);
+            if (i < categories.size() - 1) printf(" → ");
+        }
+        printf("\n");
         
-        // Füge die nicht-leeren Trash-Partitionen zur Sammlung hinzu
-        if (trash_0.size > 0) all_partitions.push_back(trash_0);
-        if (trash_1.size > 0) all_partitions.push_back(trash_1);
-        if (trash_2.size > 0) all_partitions.push_back(trash_2);
+        // Erstelle den Wurzelknoten des Baums
+        PartitionNode* root = new PartitionNode(base_partition);
         
-        // Erstelle die regulären Partitionen für Einträge mit ausreichend Tokens
-        std::vector<partition_t> regular_partitions;
-        createRegularPartitions(input_data, tokenizer, class_hierarchy, regular_partitions);
+        // Starte die hierarchische Partitionierung
+        hierarchicalPartitioning(root, tokenizer, categories, 0);
         
-        // Füge alle regulären Partitionen zur Gesamtsammlung hinzu
-        all_partitions.insert(all_partitions.end(), regular_partitions.begin(), regular_partitions.end());
+        printf("✅ Hierarchische Partitionierung abgeschlossen\n");
         
-        // Erstelle das Rückgabe-Dataset mit allen gültigen Partitionen
+        // Sammle alle Blätter des Baums (fertige Partitionen)
+        size_t leaf_count = countLeaves(root);
+        printf("🔍 %zu Blattpartitionen gefunden\n", leaf_count);
+        
+        // Sammle alle Blattpartitionen und Einträge ohne Token-Information
+        partition_t* leaf_partitions = new partition_t[leaf_count];
+        partition_t* no_info_partitions = new partition_t[leaf_count];
+        size_t leaf_index = 0;
+        size_t no_info_count = 0;
+        
+        collectLeaves(root, leaf_partitions, no_info_partitions, leaf_index, no_info_count);
+        
+        printf("🔍 %zu Blattpartitionen und %zu Partitionen mit Einträgen ohne Token-Information gesammelt\n", 
+               leaf_index, no_info_count);
+        
+        // Verteile die Einträge ohne Token-Information auf die Blattpartitionen
+        printf("🔍 Verteile Einträge ohne Token-Information auf Blattpartitionen...\n");
+        distributeNoInfoEntries(no_info_partitions, no_info_count, leaf_partitions, leaf_index);
+        
+        // Nun überlappende Partitionen für alle noch zu großen Partitionen erstellen
+        printf("🔍 Erstelle überlappende Partitionen für zu große Partitionen...\n");
+        
+        // Zähle zuerst, wie viele Partitionen nach dem Aufteilen entstehen werden
+        size_t final_count = 0;
+        for (size_t i = 0; i < leaf_index; i++) {
+            if (leaf_partitions[i].size > config.size_threshold) {
+                // Berechne, wie viele Teilpartitionen benötigt werden
+                double overlap = config.overlap_ratio;
+                size_t target_size = config.size_threshold;
+                size_t step_size = static_cast<size_t>(target_size * (1.0 - overlap));
+                if (step_size < 1) step_size = 1;
+                size_t num_parts = (leaf_partitions[i].size + step_size - 1) / step_size;
+                final_count += num_parts;
+            } else {
+                final_count++;
+            }
+        }
+        
+        // Erstelle das Ergebnis-Array
+        partition_t* final_partitions = new partition_t[final_count];
+        size_t final_index = 0;
+        
+        // Teile große Partitionen auf und füge sie zum Ergebnis hinzu
+        for (size_t i = 0; i < leaf_index; i++) {
+            if (leaf_partitions[i].size > config.size_threshold) {
+                printf("   Partition %zu: %zu Einträge (über Schwellwert), erstelle überlappende Teilpartitionen\n", 
+                       i, leaf_partitions[i].size);
+                
+                createOverlappingPartitions(leaf_partitions[i], final_partitions, final_index);
+            } else {
+                printf("   Partition %zu: %zu Einträge (unter Schwellwert), übernehme unverändert\n", 
+                       i, leaf_partitions[i].size);
+                
+                final_partitions[final_index++] = leaf_partitions[i];
+            }
+        }
+        
+        // Erstelle das Ergebnisdatenset
         dataSet<partition_t>* result = new dataSet<partition_t>();
+        result->size = final_index;
+        result->data = new partition_t[final_index];
         
-        // Filtere leere Partitionen und solche mit nur einem Element
-        std::vector<partition_t> valid_partitions;
-        for (auto& part : all_partitions) {
-            if (part.size > 1) {
-                valid_partitions.push_back(part);
-            } else if (part.size == 1) {
-                // Befreie den Speicher für Partitionen mit nur einem Element
-                delete[] part.data;
-            }
+        for (size_t i = 0; i < final_index; i++) {
+            result->data[i] = final_partitions[i];
         }
         
-        // Erstelle das endgültige Dataset
-        result->size = valid_partitions.size();
-        result->data = new partition_t[valid_partitions.size()];
+        // Aufräumen
+        delete[] final_partitions;
+        delete[] leaf_partitions;
+        delete[] no_info_partitions;
+        delete root; // Lösche den gesamten Baum
         
-        // Kopiere alle gültigen Partitionen ins Ergebnis
-        for (size_t i = 0; i < valid_partitions.size(); i++) {
-            result->data[i] = valid_partitions[i];
+        // End-Zeit erfassen und Dauer berechnen
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+        
+        printf("✅ Partitionierung abgeschlossen: %zu Partitionen erstellt (%.2f Sekunden)\n", 
+               result->size, duration / 1000.0);
+        
+        // Statistiken ausgeben
+        size_t min_size = (result->size > 0) ? result->data[0].size : 0;
+        size_t max_size = 0;
+        size_t total_size = 0;
+        
+        for (size_t i = 0; i < result->size; i++) {
+            size_t size = result->data[i].size;
+            min_size = std::min(min_size, size);
+            max_size = std::max(max_size, size);
+            total_size += size;
         }
         
-        printf("Final partition count: %zu\n", result->size);
+        double avg_size = (result->size > 0) ? (double)total_size / result->size : 0;
+        printf("📊 Statistik: Min=%zu, Max=%zu, Durchschnitt=%.1f Einträge pro Partition\n", 
+               min_size, max_size, avg_size);
+        
         return result;
     }
 
 private:
-    // Hilfsfunktion, um leserlichen Namen für eine Kategorie zurückzugeben
-    const char* getCategoryName(category cat) {
-        static const char* names[] = {
-            "assembler_brand", "assembler_modell", "ram_capacity/storage_capacity", 
-            "rom_capacity/class_a", "cpu_brand/class_c", "cpu_fam/class_v",
-            "cpu_series/class_u", "gpu_brand/class_uhs", "gpu_fam/variant",
-            "gpu_series/data_speed", "display_resolution/formfactor", "display_size/connection_type"
-        };
-        
-        if (cat >= 0 && cat < 12) {
-            return names[cat];
-        }
-        return "unknown";
-    }
+    Config config;
+    size_t partition_counter = 0;
     
-    // Erstellt die drei Trash-Partitionen für Einträge mit 0, 1 oder 2 Tokens
-    void createTrashPartitions(dataSet<InType>* input_data, 
-                              partition_t& trash_0, partition_t& trash_1, partition_t& trash_2) {
-        printf("Creating trash partitions for entries with ≤2 tokens\n");
-        
-        // Initialisiere die Trash-Partitionen
-        trash_0.size = 0;
-        trash_0.capacity = input_data->size;
-        trash_0.data = new pair[input_data->size];
-        
-        trash_1.size = 0;
-        trash_1.capacity = input_data->size;
-        trash_1.data = new pair[input_data->size];
-        
-        trash_2.size = 0;
-        trash_2.capacity = input_data->size;
-        trash_2.data = new pair[input_data->size];
-        
-        // Zähle, wie viele Einträge in jede Trash-Partition kommen
-        size_t count_0 = 0, count_1 = 0, count_2 = 0;
-        
-        // Verteile die Einträge auf die Trash-Partitionen basierend auf token_count
+    /**
+     * @brief Erstellt die initiale Basispartition mit gefilterten Einträgen
+     */
+    partition_t createBasePartition(dataSet<InType>* input_data) {
+        // Zähle zuerst, wie viele Einträge mindestens min_token_count Tokens haben
+        size_t valid_count = 0;
         for (size_t i = 0; i < input_data->size; i++) {
-            InType* entry = &input_data->data[i];
-            
-            if (entry->token_count == 0) {
-                trash_0.data[trash_0.size][0] = (uintptr_t)i;      // Index
-                trash_0.data[trash_0.size][1] = (uintptr_t)entry;  // Pointer
-                trash_0.size++;
-                count_0++;
-            } 
-            else if (entry->token_count == 1) {
-                trash_1.data[trash_1.size][0] = (uintptr_t)i;      // Index
-                trash_1.data[trash_1.size][1] = (uintptr_t)entry;  // Pointer
-                trash_1.size++;
-                count_1++;
-            }
-            else if (entry->token_count == 2) {
-                trash_2.data[trash_2.size][0] = (uintptr_t)i;      // Index
-                trash_2.data[trash_2.size][1] = (uintptr_t)entry;  // Pointer
-                trash_2.size++;
-                count_2++;
+            if (input_data->data[i].token_count >= config.min_token_count) {
+                valid_count++;
             }
         }
         
-        // Gib Informationen über die erstellten Trash-Partitionen aus
-        printf("Trash partitions created:\n");
-        printf("  - Trash 0 (0 tokens): %zu entries\n", count_0);
-        printf("  - Trash 1 (1 token):  %zu entries\n", count_1);
-        printf("  - Trash 2 (2 tokens): %zu entries\n", count_2);
-        printf("  - Total trash entries: %zu (%.1f%% of dataset)\n", 
-               count_0 + count_1 + count_2, 
-               100.0 * (count_0 + count_1 + count_2) / input_data->size);
-               
-        // Befreie nicht benötigte Trash-Partitionen
-        if (count_0 == 0) {
-            delete[] trash_0.data;
-            trash_0.data = nullptr;
-        }
+        printf("🔍 Von %zu Einträgen haben %zu mindestens %zu Tokens (%.1f%%)\n", 
+               input_data->size, valid_count, config.min_token_count,
+               (valid_count * 100.0) / input_data->size);
         
-        if (count_1 == 0) {
-            delete[] trash_1.data;
-            trash_1.data = nullptr;
-        }
+        partition_t partition;
+        partition.size = valid_count;
+        partition.capacity = valid_count;
+        partition.data = new pair[valid_count]();
         
-        if (count_2 == 0) {
-            delete[] trash_2.data;
-            trash_2.data = nullptr;
-        }
-    }
-    
-    // Erstellt und verarbeitet die regulären Partitionen rekursiv
-    void createRegularPartitions(dataSet<InType>* input_data, Tokenizer* tokenizer, 
-                                const std::vector<category>& class_hierarchy,
-                                std::vector<partition_t>& output_partitions) {
-        printf("\nCreating regular partitions for entries with >2 tokens\n");
-        
-        // Erstelle eine anfängliche Partition mit allen Einträgen mit 3+ Tokens
-        partition_t initial_partition;
-        initial_partition.size = 0;
-        initial_partition.capacity = input_data->size;
-        initial_partition.data = new pair[input_data->size];
-        
-        // Zähle Einträge mit ausreichend Tokens
-        size_t valid_entries = 0;
+        size_t valid_idx = 0;
+        size_t report_step = input_data->size > 10000 ? input_data->size / 10 : input_data->size;
         
         for (size_t i = 0; i < input_data->size; i++) {
-            InType* entry = &input_data->data[i];
+            if (i > 0 && i % report_step == 0) {
+                printf("   Basispartition: %zu%% abgeschlossen (%zu/%zu)\n", (i * 100) / input_data->size, i, input_data->size);
+            }
             
-            if (entry->token_count > 2) {
-                initial_partition.data[initial_partition.size][0] = (uintptr_t)i;      // Index
-                initial_partition.data[initial_partition.size][1] = (uintptr_t)entry;  // Pointer
-                initial_partition.size++;
-                valid_entries++;
+            if (input_data->data[i].token_count >= config.min_token_count) {
+                partition.data[valid_idx][0] = static_cast<uintptr_t>(i);
+                partition.data[valid_idx][1] = reinterpret_cast<uintptr_t>(&input_data->data[i]);
+                valid_idx++;
             }
         }
         
-        printf("Initial regular partition created with %zu entries (%.1f%% of dataset)\n",
-               valid_entries, 100.0 * valid_entries / input_data->size);
-               
-        if (valid_entries == 0) {
-            // Keine gültigen Einträge, befreie den Speicher und beende
-            delete[] initial_partition.data;
+        printf("✅ Basispartition erstellt mit %zu von %zu Einträgen (Kapazität: %zu)\n", 
+               valid_count, input_data->size, partition.capacity);
+        
+        return partition;
+    }
+    
+    /**
+     * @brief Führt eine hierarchische Partitionierung basierend auf Kategorien durch
+     */
+    void hierarchicalPartitioning(
+        PartitionNode* node,
+        Tokenizer* tokenizer,
+        const std::vector<category>& categories,
+        size_t category_index)
+    {
+        partition_t& current_partition = node->data;
+        
+        // Aktuellen Status ausgeben
+        if (category_index < categories.size()) {
+            printf("🔄 Partitionierung (Tiefe %zu): Kategorie %d, %zu Elemente\n", 
+                   category_index, categories[category_index], current_partition.size);
+        }
+        
+        // Wenn keine weiteren Kategorien vorhanden, Partition im Baum lassen
+        if (category_index >= categories.size()) {
+            printf("   ✓ Keine weiteren Kategorien, Partition mit %zu Einträgen fertig\n", 
+                   current_partition.size);
+            partition_counter++;
             return;
         }
         
-        // Beginne mit der rekursiven Partitionierung, falls die Anzahl der Einträge über dem Threshold liegt
-        if (valid_entries > size_threshhold) {
-            // Vector zum Sammeln der Partitionen
-            std::vector<partition_t> partitions;
-            partitions.push_back(initial_partition);
-            
-            // Rekursive Partitionierung durch alle Hierarchieebenen
-            partitionRecursively(partitions, tokenizer, class_hierarchy, 0);
-            
-            // Füge alle erzeugten Partitionen zur Ausgabe hinzu
-            for (auto& part : partitions) {
-                if (part.size > 0) {
-                    output_partitions.push_back(part);
-                } else {
-                    delete[] part.data;
-                }
-            }
-        } else {
-            // Wenn die anfängliche Partition klein genug ist, füge sie direkt hinzu
-            output_partitions.push_back(initial_partition);
-        }
-    }
-    
-    // Rekursive Partitionierung durch die Hierarchieebenen
-    void partitionRecursively(std::vector<partition_t>& partitions, Tokenizer* tokenizer,
-                             const std::vector<category>& class_hierarchy, size_t level) {
-        // Wenn alle Hierarchieebenen verarbeitet wurden, beende die Rekursion
-        if (level >= class_hierarchy.size()) {
-            return;
-        }
+        // Aktuelle Kategorie auswählen
+        category current_category = categories[category_index];
         
-        // Bestimme die aktuelle Kategorie für die Partitionierung
-        category current_category = class_hierarchy[level];
-        printf("\nPartitioning at level %zu using category %s\n", 
-               level + 1, getCategoryName(current_category));
-        
-        // Bestimme die Anzahl der Tokens für die aktuelle Kategorie
+        // Anzahl der möglichen Token-Werte für diese Kategorie
         size_t num_tokens = tokenizer->m_class_tokens_found[current_category];
+                
+        printf("   🔍 Teile nach Kategorie %d (%zu verschiedene Token-Werte)\n", 
+               current_category, num_tokens);
         
-        if (num_tokens == 0) {
-            printf("Warning: No tokens found for category %s, skipping to next level\n", 
-                  getCategoryName(current_category));
-            partitionRecursively(partitions, tokenizer, class_hierarchy, level + 1);
+        // Array für Anzahl der Einträge pro Token
+        size_t* token_counts = new size_t[num_tokens + 1]();  // Mit 0 initialisieren
+        
+        // Zähle zuerst die Anzahl der Einträge pro Token
+        for (size_t i = 0; i < current_partition.size; i++) {
+            InType* entry = reinterpret_cast<InType*>(current_partition.data[i][1]);
+            token tok = (*entry)[current_category];
+            
+            if (tok >= 0 && tok <= num_tokens) {
+                token_counts[tok]++;
+            }
+        }
+        
+        // Überprüfe, ob es Einträge ohne Token-Information gibt
+        size_t no_info_count = token_counts[0];
+        bool has_no_info = (no_info_count > 0);
+        
+        if (has_no_info) {
+            printf("   ℹ️ %zu Einträge ohne Token-Information für Kategorie %d\n", 
+                   no_info_count, current_category);
+        }
+        
+        // Zähle nicht-leere Token-Werte
+        size_t non_empty_count = 0;
+        for (size_t t = 1; t <= num_tokens; t++) {
+            if (token_counts[t] > 0) {
+                non_empty_count++;
+            }
+        }
+        
+        printf("   ✓ %zu nicht-leere Subpartitionen gefunden\n", non_empty_count);
+        
+        if (non_empty_count == 0) {
+            // Keine sinnvolle Aufteilung möglich
+            printf("   ⚠️ Keine nicht-leeren Subpartitionen, überspringe Kategorie\n");
+            delete[] token_counts;
+            
+            // Fahre mit der nächsten Kategorie fort
+            hierarchicalPartitioning(node, tokenizer, categories, category_index + 1);
             return;
         }
         
-        printf("Found %zu tokens for category %s\n", num_tokens, getCategoryName(current_category));
+        // Erstelle ein Array von PartitionNode-Pointern für die Kinder
+        node->children = new PartitionNode*[non_empty_count];
+        node->child_count = non_empty_count;
         
-        // Verarbeite jede bestehende Partition
-        size_t original_count = partitions.size();
+        // Array für nicht-leere Token-Werte
+        size_t* non_empty_tokens = new size_t[non_empty_count];
+        size_t token_idx = 0;
         
-        for (size_t p_idx = 0; p_idx < original_count; p_idx++) {
-            partition_t& current = partitions[p_idx];
-            
-            // Wenn die Partition leer ist oder zu klein, überspringe sie
-            if (current.size <= 1 || current.size <= size_threshhold) {
-                printf("Skipping partition %zu (size: %zu, threshold: %zu)\n", 
-                      p_idx, current.size, size_threshhold);
-                continue;
+        // Erstelle Subpartitionen und speichere sie als Kinder
+        for (size_t t = 1; t <= num_tokens; t++) {
+            if (token_counts[t] > 0) {
+                // Berechne Kapazität nur für Einträge mit Token-Information
+                size_t capacity = token_counts[t];
+                
+                // Erstelle eine neue Partition
+                partition_t sub_part;
+                sub_part.capacity = capacity;
+                sub_part.size = 0;
+                sub_part.data = new pair[capacity]();
+                
+                printf("   ✓ Subpartition für Token %zu mit Kapazität %zu erstellt\n", 
+                       t, capacity);
+                
+                // Erstelle einen neuen Knoten im Baum
+                node->children[token_idx] = new PartitionNode(sub_part);
+                non_empty_tokens[token_idx] = t;
+                token_idx++;
+            }
+        }
+        
+        // Erstelle eine separate Partition für Einträge ohne Token-Information
+        if (has_no_info) {
+            node->no_info.capacity = no_info_count;
+            node->no_info.size = 0;
+            node->no_info.data = new pair[no_info_count]();
+            printf("   ✓ Separate Partition für %zu Einträge ohne Token-Information erstellt\n", 
+                   no_info_count);
+        }
+        
+        // Status für Verteilung der Einträge
+        size_t progress_step = current_partition.size > 1000 ? current_partition.size / 10 : current_partition.size;
+        printf("   🔄 Verteile %zu Einträge auf %zu Subpartitionen und ggf. no_info-Partition...\n", 
+               current_partition.size, non_empty_count);
+        
+        // Verteile die Einträge auf die Subpartitionen
+        for (size_t i = 0; i < current_partition.size; i++) {
+            if (i > 0 && i % progress_step == 0) {
+                printf("      %zu%% abgeschlossen (%zu/%zu)\n", 
+                       (i * 100) / current_partition.size, i, current_partition.size);
             }
             
-            printf("Processing partition %zu with %zu entries\n", p_idx, current.size);
+            uintptr_t id = current_partition.data[i][0];
+            InType* entry = reinterpret_cast<InType*>(current_partition.data[i][1]);
+            token tok = (*entry)[current_category];
             
-            // Erstelle Subpartitionen für jeden Token-Wert
-            std::vector<partition_t> subparts(num_tokens);
-            for (size_t t = 0; t < num_tokens; t++) {
-                subparts[t].size = 0;
-                subparts[t].capacity = current.size;
-                subparts[t].data = new pair[current.size];
-            }
-            
-            // Zähler für statistische Informationen
-            size_t entries_with_info = 0;
-            size_t entries_without_info = 0;
-            
-            // Verteile die Einträge auf die Subpartitionen
-            for (size_t i = 0; i < current.size; i++) {
-                InType* entry = (InType*)current.data[i][1];
-                uintptr_t entry_id = current.data[i][0];
-                
-                // Hole den Token-Wert für die aktuelle Kategorie
-                token tok_value = (*entry)[current_category];
-                
-                if (tok_value == 0) {
-                    // Keine Information für diese Kategorie, kopiere in alle Subpartitionen
-                    entries_without_info++;
-                    for (size_t t = 0; t < num_tokens; t++) {
-                        subparts[t].data[subparts[t].size][0] = entry_id;
-                        subparts[t].data[subparts[t].size][1] = (uintptr_t)entry;
-                        subparts[t].size++;
+            if (tok >= 1 && tok <= num_tokens && token_counts[tok] > 0) {
+                // Finde den richtigen Kindknoten
+                for (size_t j = 0; j < non_empty_count; j++) {
+                    if (non_empty_tokens[j] == tok) {
+                        partition_t& target = node->children[j]->data;
+                        target.data[target.size][0] = id;
+                        target.data[target.size][1] = reinterpret_cast<uintptr_t>(entry);
+                        target.size++;
+                        break;
                     }
-                } 
-                else if (tok_value <= num_tokens) {
-                    // Spezifische Information vorhanden, füge zur entsprechenden Subpartition hinzu
-                    entries_with_info++;
-                    size_t t_idx = tok_value - 1;  // Token-Werte beginnen bei 1
-                    subparts[t_idx].data[subparts[t_idx].size][0] = entry_id;
-                    subparts[t_idx].data[subparts[t_idx].size][1] = (uintptr_t)entry;
-                    subparts[t_idx].size++;
-                }
-                else {
-                    // Token-Wert außerhalb des gültigen Bereichs
-                    printf("Warning: Token value %hu for category %s exceeds valid range (1-%zu)\n",
-                           tok_value, getCategoryName(current_category), num_tokens);
                 }
             }
-            
-            printf("Partition %zu distribution: %zu with info, %zu without info\n",
-                   p_idx, entries_with_info, entries_without_info);
-                   
-            // Gib detaillierte Informationen für jede Subpartition aus
-            printf("Subpartition sizes:\n");
-            for (size_t t = 0; t < num_tokens; t++) {
-                printf("  - Subpart %zu (token %zu): %zu entries\n", 
-                       t, t+1, subparts[t].size);
-            }
-            
-            // Entferne die aktuelle Partition und ersetze sie durch ihre Subpartitionen
-            delete[] current.data;
-            current.data = nullptr;
-            current.size = 0;
-            
-            // Füge alle nicht-leeren Subpartitionen hinzu
-            for (auto& subpart : subparts) {
-                if (subpart.size > 0) {
-                    partitions.push_back(std::move(subpart));
-                } else {
-                    delete[] subpart.data;
-                }
+            else if (has_no_info) {
+                // In die separate no_info Partition einfügen
+                node->no_info.data[node->no_info.size][0] = id;
+                node->no_info.data[node->no_info.size][1] = reinterpret_cast<uintptr_t>(entry);
+                node->no_info.size++;
             }
         }
         
-        // Entferne alle leeren Partitionen (die durch die obige Schleife entstanden sind)
-        partitions.erase(
-            std::remove_if(partitions.begin(), partitions.end(), 
-                [](const partition_t& p) { return p.size == 0; }),
-            partitions.end()
-        );
+        printf("   ✓ Verteilung abgeschlossen\n");
         
-        // Gib eine Zusammenfassung der aktuellen Partitionen aus
-        size_t total_entries = 0;
-        size_t partitions_above_threshold = 0;
+        // Speicher der Elternpartition freigeben
+        printf("   🗑️ Elternpartition mit %zu Einträgen wird gelöscht (Kapazität: %zu)\n", 
+               current_partition.size, current_partition.capacity);
+        delete[] current_partition.data;
+        current_partition.data = nullptr;
+        current_partition.size = 0;
+        current_partition.capacity = 0;
         
-        for (const auto& part : partitions) {
-            total_entries += part.size;
-            if (part.size > size_threshhold) {
-                partitions_above_threshold++;
-            }
+        // Zeige Verteilungsstatistik
+        printf("   📊 Verteilung nach Kategorie %d: ", current_category);
+        for (size_t j = 0; j < non_empty_count && j < 5; j++) {
+            size_t t = non_empty_tokens[j];
+            printf("Token%zu=%zu ", t, node->children[j]->data.size);
+        }
+        if (non_empty_count > 5) {
+            printf("... (%zu weitere)", non_empty_count - 5);
         }
         
-        printf("\nAfter level %zu (%s):\n", level + 1, getCategoryName(current_category));
-        printf("  - Total partitions: %zu\n", partitions.size());
-        printf("  - Total entries: %zu\n", total_entries);
-        printf("  - Partitions above threshold: %zu\n", partitions_above_threshold);
-        
-        // Wenn nötig, fahre mit der nächsten Hierarchieebene fort
-        if (partitions_above_threshold > 0 && level + 1 < class_hierarchy.size()) {
-            partitionRecursively(partitions, tokenizer, class_hierarchy, level + 1);
-        } else if (partitions_above_threshold > 0) {
-            printf("WARNING: Still have partitions above threshold but no more categories\n");
-        } else {
-            printf("All partitions are now below threshold, stopping recursion\n");
+        if (has_no_info) {
+            printf(", No-Info=%zu", node->no_info.size);
         }
+        printf("\n");
+        
+        // Rekursiv für alle Kinder aufrufen
+        for (size_t j = 0; j < non_empty_count; j++) {
+            size_t t = non_empty_tokens[j];
+            printf("   🔄 Verarbeite Subpartition für Token %zu (Größe: %zu)\n", 
+                   t, node->children[j]->data.size);
+            
+            hierarchicalPartitioning(node->children[j], tokenizer, categories, category_index + 1);
+        }
+        
+        // Temporäre Arrays freigeben
+        delete[] token_counts;
+        delete[] non_empty_tokens;
+    }
+    
+    // Zählt, wie viele Blätter der Baum hat
+    size_t countLeaves(PartitionNode* node) {
+        if (!node) return 0;
+        
+        // Ein Blatt ist ein Knoten ohne Kinder oder mit gelöschter Partition
+        if (node->child_count == 0 && node->data.size > 0) {
+            return 1;
+        }
+        
+        size_t count = 0;
+        for (size_t i = 0; i < node->child_count; i++) {
+            count += countLeaves(node->children[i]);
+        }
+        
+        return count;
     }
 
-private:
-    size_t size_threshhold;
+    // Sammelt alle Blätter und no_info Partitionen in Arrays
+    void collectLeaves(
+        PartitionNode* node, 
+        partition_t* leaf_partitions, 
+        partition_t* no_info_partitions,
+        size_t& leaf_index, 
+        size_t& no_info_index) 
+    {
+        if (!node) return;
+        
+        // Sammle no_info Partition, falls vorhanden
+        if (node->no_info.data != nullptr && node->no_info.size > 0) {
+            no_info_partitions[no_info_index++] = node->no_info;
+            // Setze auf null, damit sie nicht doppelt freigegeben wird
+            node->no_info.data = nullptr;
+            node->no_info.size = 0;
+            node->no_info.capacity = 0;
+        }
+        
+        // Ein Blatt ist ein Knoten ohne Kinder oder mit gelöschter Partition
+        if (node->child_count == 0 && node->data.size > 0) {
+            leaf_partitions[leaf_index++] = node->data;
+            // Setze auf null, damit sie nicht doppelt freigegeben wird
+            node->data.data = nullptr;
+            node->data.size = 0;
+            node->data.capacity = 0;
+            return;
+        }
+        
+        for (size_t i = 0; i < node->child_count; i++) {
+            collectLeaves(node->children[i], leaf_partitions, no_info_partitions, leaf_index, no_info_index);
+        }
+    }
+    
+    // Verteilt die Einträge ohne Token-Information auf die Blattpartitionen
+    void distributeNoInfoEntries(
+        partition_t* no_info_partitions, 
+        size_t no_info_count,
+        partition_t* leaf_partitions, 
+        size_t leaf_count)
+    {
+        if (no_info_count == 0 || leaf_count == 0) {
+            return;
+        }
+        
+        // Zähle die Gesamtzahl der Einträge ohne Token-Information
+        size_t total_no_info_entries = 0;
+        for (size_t i = 0; i < no_info_count; i++) {
+            total_no_info_entries += no_info_partitions[i].size;
+        }
+        
+        printf("   🔍 Einfache Verteilung von %zu Einträgen ohne Token-Information...\n", 
+               total_no_info_entries);
+        
+        // Berechne, wie viele Einträge pro Partition hinzugefügt werden müssen
+        // (gleichmäßig auf alle Partitionen verteilt)
+        size_t entries_per_partition = (total_no_info_entries + leaf_count - 1) / leaf_count;
+        
+        // Erweitere die Kapazität jeder Partition
+        for (size_t i = 0; i < leaf_count; i++) {
+            size_t old_size = leaf_partitions[i].size;
+            size_t new_capacity = old_size + entries_per_partition;
+            
+            pair* new_data = new pair[new_capacity]();
+            
+            // Kopiere die bestehenden Einträge
+            for (size_t j = 0; j < old_size; j++) {
+                new_data[j][0] = leaf_partitions[i].data[j][0];
+                new_data[j][1] = leaf_partitions[i].data[j][1];
+            }
+            
+            // Ersetze die alten Daten
+            delete[] leaf_partitions[i].data;
+            leaf_partitions[i].data = new_data;
+            leaf_partitions[i].capacity = new_capacity;
+        }
+        
+        // Verteile die Einträge sequentiell
+        size_t target_partition = 0;
+        size_t entry_count = 0;
+        
+        for (size_t i = 0; i < no_info_count; i++) {
+            for (size_t j = 0; j < no_info_partitions[i].size; j++) {
+                // Wechsle zur nächsten Partition, wenn die aktuelle voll ist
+                while (leaf_partitions[target_partition].size >= leaf_partitions[target_partition].capacity) {
+                    target_partition = (target_partition + 1) % leaf_count;
+                }
+                
+                // Füge den Eintrag hinzu
+                leaf_partitions[target_partition].data[leaf_partitions[target_partition].size][0] = 
+                    no_info_partitions[i].data[j][0];
+                leaf_partitions[target_partition].data[leaf_partitions[target_partition].size][1] = 
+                    no_info_partitions[i].data[j][1];
+                leaf_partitions[target_partition].size++;
+                
+                // Wechsle zur nächsten Partition für gleichmäßige Verteilung
+                target_partition = (target_partition + 1) % leaf_count;
+                entry_count++;
+                
+                // Status-Update für große Datenmengen
+                if (entry_count % 100000 == 0) {
+                    printf("      %zu%% der Einträge ohne Token-Information verteilt (%zu/%zu)\n",
+                           (entry_count * 100) / total_no_info_entries, entry_count, total_no_info_entries);
+                }
+            }
+            
+            // Gib den Speicher der verarbeiteten no_info Partition frei
+            delete[] no_info_partitions[i].data;
+            no_info_partitions[i].data = nullptr;
+        }
+        
+        printf("   ✅ %zu Einträge ohne Token-Information wurden gleichmäßig auf %zu Partitionen verteilt\n",
+               entry_count, leaf_count);
+    }
+
+    /**
+     * @brief Erstellt überlappende Teilpartitionen für eine große Partition
+     */
+    void createOverlappingPartitions(
+        partition_t& large_partition, 
+        partition_t* result_partitions,
+        size_t& result_index)
+    {
+        size_t size = large_partition.size;
+        
+        double overlap = config.overlap_ratio;
+        size_t target_size = config.size_threshold;
+        
+        if (size <= target_size) {
+            printf("   ✓ Partition ist bereits klein genug (%zu Einträge)\n", size);
+            result_partitions[result_index++] = large_partition;
+            return;
+        }
+        
+        size_t step_size = static_cast<size_t>(target_size * (1.0 - overlap));
+        if (step_size < 1) step_size = 1;
+        
+        size_t num_parts = (size + step_size - 1) / step_size;
+        
+        printf("   🔍 Erstelle %zu überlappende Teilpartitionen (Überlappung: %.0f%%) aus Partition mit %zu Einträgen\n", 
+            num_parts, overlap * 100, size);
+        
+        for (size_t part = 0; part < num_parts; part++) {
+            size_t start_idx = part * step_size;
+            size_t end_idx = start_idx + target_size;
+            
+            if (end_idx > size) end_idx = size;
+            
+            size_t part_size = end_idx - start_idx;
+            
+            partition_t sub_part;
+            sub_part.size = part_size;
+            sub_part.capacity = part_size;
+            sub_part.data = new pair[part_size]();
+            
+            for (size_t i = 0; i < part_size; i++) {
+                size_t src_idx = start_idx + i;
+                sub_part.data[i][0] = large_partition.data[src_idx][0];
+                sub_part.data[i][1] = large_partition.data[src_idx][1];
+            }
+            
+            result_partitions[result_index++] = sub_part;
+            partition_counter++;
+            
+            if (part % 5 == 0 || part == num_parts - 1 || end_idx >= size) {
+                printf("      ✓ Teilpartition %zu/%zu: %zu Einträge (Bereich %zu-%zu)\n", 
+                    part + 1, num_parts, part_size, start_idx, end_idx - 1);
+            }
+            
+            if (end_idx >= size) break;
+        }
+        
+        printf("   🗑️ Große Partition mit %zu Einträgen wird nach Aufteilung gelöscht\n", size);
+        delete[] large_partition.data;
+    }
+    
+    /**
+     * @brief Erstellt eine einzelne Partition mit allen Einträgen
+     */
+    dataSet<partition_t>* createSinglePartition(dataSet<InType>* input_data) {
+        printf("🔍 Erstelle einzelne Partition für %zu Einträge...\n", input_data->size);
+        
+        partition_t single_partition = createBasePartition(input_data);
+        
+        dataSet<partition_t>* result = new dataSet<partition_t>();
+        result->size = 1;
+        result->data = new partition_t[1];
+        result->data[0] = single_partition;
+        
+        printf("✅ Einzelne Partition erstellt.\n");
+        return result;
+    }
+    
+    /**
+     * @brief Erstellt ein leeres Partitionierungs-Dataset
+     */
+    dataSet<partition_t>* createEmptyPartitionSet() {
+        printf("ℹ️ Erstelle leeres Partitions-Set.\n");
+        
+        dataSet<partition_t>* result = new dataSet<partition_t>();
+        result->size = 0;
+        result->data = nullptr;
+        return result;
+    }
 };
 
 #endif // PARTITIONING_MNGR_H

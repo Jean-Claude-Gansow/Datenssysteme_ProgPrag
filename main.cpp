@@ -19,13 +19,12 @@
 #include "FileInput.h"
 #include "DataTypes.h"
 
-std::string files[] = 
-{
-    "../data/Z1.csv",
-    "../data/Z2.csv",
-    "../data/ZY1.csv",
-    "../data/ZY2.csv"
-};
+std::string files[] =
+    {
+        "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k.csv",
+        "../data/Test_Datasets/Storage_Test-Datasets/storage_600k.csv",
+        "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k_loesungen.csv",
+        "../data/Test_Datasets/Storage_Test-Datasets/storage_600k_loesungen.csv"};
 
 // Die Funktion ist jetzt in debug_utils.h definiert
 
@@ -39,8 +38,8 @@ int main(int argc, char** argv)
 
     Tokenization_mngr<12, single_t, laptop> *m_Laptop_tokenization_mngr = new Tokenization_mngr<12, single_t, laptop>({"12","single_t","laptop"});
     Tokenization_mngr<12, quintupel, storage_drive> *m_Storage_tokenization_mngr = new Tokenization_mngr<12, quintupel, storage_drive>({"12","quintupel","storage_drive"});
-    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>(5000);
-    Partitioning_mngr<quintupel,storage_drive,12> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,12>(5000);
+    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>();
+    Partitioning_mngr<quintupel,storage_drive,12> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,12>();
     Matching_mngr<laptop>* m_matching_laptop_mngr = new Matching_mngr<laptop>();
     Matching_mngr<storage_drive> *m_matching_storage_mngr = new Matching_mngr<storage_drive>();
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
@@ -54,8 +53,8 @@ int main(int argc, char** argv)
     int start_total = clock();
 
     // 1. Datei-Objekte erzeugen
-    File file1(files[0],true);
-    File file2(files[1],true);
+    File file1(files[0]);
+    File file2(files[1]);
     File file3(files[2],true);
     File file4(files[3],true);
 
@@ -65,7 +64,7 @@ int main(int argc, char** argv)
     //rom_capacity: 3
     //
 
-    std::vector<category> laptop_partition_hierarchy = {assembler_brand, assembler_modell, cpu_brand, cpu_fam, ram_capacity};
+    std::vector<category> laptop_partition_hierarchy = {assembler_brand, assembler_modell, cpu_brand, cpu_fam};
     std::vector<category> storage_partition_hierarchy = {assembler_brand, assembler_modell, rom_capacity};
     //TODO: Listenbäume aufbauen. Format: Token;Token;Token;...Token\n -> index = line
     //TODO: Listen zuusammenführen -> Klassenindices können erst dann korrekt gebaut werden.
@@ -94,10 +93,10 @@ int main(int argc, char** argv)
     m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_modelle_amd.tokenz", gpu_fam,gpu_brand);
     m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_modelle_intel.tokenz", gpu_fam, gpu_brand);
     m_Laptop_tokenization_mngr->loadTokenList("../data/gpu_modelle_nvidia.tokenz", gpu_fam, gpu_brand);
-    m_Laptop_tokenization_mngr->loadTokenList("../data/ram_size.tokenz",ram_capacity);//
-    m_Laptop_tokenization_mngr->loadTokenList("../data/rom_size.tokenz",rom_capacity);
-    m_Laptop_tokenization_mngr->loadTokenList("../data/display_resolutions.tokenz", display_resolution); //
-    m_Laptop_tokenization_mngr->loadTokenList("../data/display_size.tokenz", display_size);
+    m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_ram_size.tokenz",ram_capacity);//
+    m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_rom_size.tokenz",rom_capacity);
+    m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_display_resolutions.tokenz", display_resolution); //
+    m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_display_size.tokenz", display_size);
 
     m_Storage_tokenization_mngr->loadTokenList("../data/storage_marken.tokenz",assembler_brand);
     m_Storage_tokenization_mngr->loadTokenList("../data/storage_modelle.tokenz", assembler_modell);
@@ -128,12 +127,12 @@ int main(int argc, char** argv)
     printf("Parsed %zu lines from file2\n", dataSet2->size);
     //print_Dataset(*dataSet2, "%_,%s,%f,%s,%s,%V");
 
-    //dataSet<match>* dataSetSol1 = parser_mngr.parse_multithreaded<match>(file3.data(), file3.size(), file3.line_count(), "%d,%d", maxThreads);
-    //printf("Parsed %zu lines from file3\n", dataSetSol1->size);
+    dataSet<match>* dataSetSol1 = parser_mngr.parse_multithreaded<match>(file3.data(), file3.size(), file3.line_count(), "%d,%d", maxThreads);
+    printf("Parsed %zu lines from file3\n", dataSetSol1->size);
     //print_Dataset(*dataSetSol1, "%d,%d");
 
-    //dataSet<match>* dataSetSol2 = parser_mngr.parse_multithreaded<match>(file4.data(), file4.size(), file4.line_count(), "%d,%d", maxThreads);
-    //printf("Parsed %zu lines from file4\n", dataSetSol2->size);
+    dataSet<match>* dataSetSol2 = parser_mngr.parse_multithreaded<match>(file4.data(), file4.size(), file4.line_count(), "%d,%d", maxThreads);
+    printf("Parsed %zu lines from file4\n", dataSetSol2->size);
     //print_Dataset(*dataSetSol2, "%d,%d");
 
     int elapsedParse = clock() - start;
@@ -222,7 +221,7 @@ int main(int argc, char** argv)
         if (matchesDS1->data[i].size > 0)
         {
             printf("Partition %zu Matches:\n", i);
-            for (size_t j = 0; j < matchesDS2->data[i].size; j++)
+            for (size_t j = 0; j < matchesDS1->data[i].size; j++)
             {
                 printf("  <%zu,%zu>\n",
                        static_cast<size_t>(matchesDS1->data[i].matches[j].data[0]),
@@ -254,8 +253,8 @@ int main(int argc, char** argv)
 
     start = clock();
 
-    //float DS1EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS1, dataSetSol1->c_arr(), maxThreads);
-    //float DS2EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS2, dataSetSol2->c_arr(), maxThreads);
+    float DS1EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS1, dataSetSol1);
+    float DS2EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS2, dataSetSol2);
     
     int elapsedEval = clock() - start;
     printf("time elapsed for evaluation: %.2f s\n", elapsedEval / (float)CLOCKS_PER_SEC);

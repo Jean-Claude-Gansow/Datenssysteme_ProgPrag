@@ -1,6 +1,7 @@
 #include <type_traits>
 #include <cstdint>
 #include <cstring>
+#include <algorithm>
 #include <stdlib.h>
 #include <cstdio>
 #include "debug_utils.h"
@@ -317,7 +318,23 @@ struct laptop
 
     double operator | (const laptop& other) const  //implementiere eine Vergleichsfunktion basierend auf djakar
     {
-        return 0.0; //noch nicht implemenmtiert, beraten was die beste methode ist, ich schlage 2er-tupel jaccar vor, da es sehr effizent umsetzbar ist
+        //high speed jaccard simmilarity von den descriptoren (hier ein char*)
+    }
+
+    // Qualitätsindex-Funktion
+    float quality_index() const {
+        // Länge des Beschreibungstextes als Basiswert
+        size_t desc_length = description ? strlen(description) : 0;
+        
+        // Berechne einen Informationsgehalt basierend auf vorhandenen Tokens
+        // und der Textnormierung
+        float token_quality = static_cast<float>(token_count) / 12.0f;  // Maximal 12 Token-Kategorien
+        
+        // Normalisierte Textlänge (typische Produktbeschreibungen sind 50-500 Zeichen)
+        float text_quality = std::min(1.0f, desc_length / 500.0f);
+        
+        // Kombinierter Qualitätsindex: 60% Token-basiert, 40% Textlänge
+        return (token_quality * 0.6f) + (text_quality * 0.4f);
     }
 }; 
 
@@ -487,7 +504,20 @@ struct storage_drive
 
     double operator|(const storage_drive &other) const // implementiere eine Vergleichsfunktion basieren auf einer anderen Metrik als dem Direkten tokenvergleich.
     {
+        // high speed jaccard simmilarity von den descriptoren (hier ein quintupel, felder mit index 0 2 3 4 sind strings, dafür nutzbar denke ich 0 und 3)
         return 0.0; // Beispiel: 0.0 für gleiche IDs, 1.0 für unterschiedliche -- berechne basierend auf ähnlichkeitswerten
+    }
+
+    // Qualitätsindex-Funktion
+    float quality_index() const {
+        // Da keine Textbeschreibung vorhanden ist, basieren wir auf descriptor
+        size_t desc_complexity = descriptor ? 1 : 0; //der desc ist ein 5 tupel aus string, flot, string, string und string, nutzen wir doch die summe der strlen aller felder. 
+        
+        // Berechne einen Informationsgehalt basierend auf vorhandenen Tokens
+        float token_quality = static_cast<float>(token_count) / 12.0f;  // Maximal 12 Token-Kategorien
+        
+        // Kombinierter Qualitätsindex: hauptsächlich Token-basiert
+        return (token_quality * 0.8f) + (desc_complexity * 0.2f);
     }
 };
 

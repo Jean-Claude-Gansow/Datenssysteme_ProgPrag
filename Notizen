@@ -1,27 +1,2 @@
-Comma detection: not needed. We know what index we are at, therefore get the amount of numbers before the comma to determain where to read first:
-
-read as follows: 
-
-int lines = 10;
-int read = 1;
-
-loop_lable:
-for(int i = 0; i < lines; i++)
-{
-    #run data clean and order from index read to linelength-read;
-}
-read++;
-lines *= 10;
-goto loop_lable | return lable; #test whether we can calulate an adress, so that we can decide by simple calculation whether to jump, or to continue; || idea: calculate as relative jump, bitmask constant with something to either recieve relative jump to loop lable or +1 to go on;
-return_lable:
-return 0;
-
-formated CSV: 
-dynamic compile functions, 
-
-data Cleaning: first order operatons: all tolower, remove everything thats less than numerial representation of 'a' (65).
-data Cleaning: allocation time reduction: string buffer already has all the 
-
-
-TODO:
-parser funktion um in-cycle cleaning mit der lookup tabelle erweitern *p = lookup[(unsigned char)*p]
+//jaccard:
+mit einem char* über die strings iterieren, bei fund eines wortes die char* zu short oder int casten und die dem zugrunde liegenden n byte als nummer in liste speichern, anschließend nurnoch die nummern verarbeiten für schnitt und union

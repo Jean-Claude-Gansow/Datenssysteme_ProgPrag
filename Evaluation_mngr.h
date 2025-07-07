@@ -19,7 +19,7 @@ public:
     ~Evaluation_mngr(){}
 
 public:
-    float evaluateMatches(dataSet<match> *matches, dataSet<match> *Solution); // set class resources, before forking, so workers can use this
+    float evaluateMatches(dataSet<matching>* matches, dataSet<match>* Solution); // set class resources, before forking, so workers can use this
 };
 
 
