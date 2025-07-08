@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string.h>
 #include <thread>
-#include <time.h>
+#include <chrono>  // Für bessere Zeitmessung
 
 // Uncomment one of these to enable different debug levels
 // Limit_DEBUG_OUTPUT ist in debug_utils.h definiert
@@ -20,10 +20,10 @@
 
 std::string files[] =
 {
-    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_4k.csv",
-    "../data/Test_Datasets/Storage_Test-Datasets/storage_4k.csv",
-    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_4k_loesungen.csv",
-    "../data/Test_Datasets/Storage_Test-Datasets/storage_4k_loesungen.csv"
+    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_64k.csv",
+    "../data/Test_Datasets/Storage_Test-Datasets/storage_64k.csv",
+    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_64k_loesungen.csv",
+    "../data/Test_Datasets/Storage_Test-Datasets/storage_64k_loesungen.csv"
 };
 
 /*std::string files[] =
@@ -56,7 +56,8 @@ int main(int argc, char** argv)
 
     Parser_mngr parser_mngr;
 
-    int start_total = clock();
+    // Zeitmessung mit std::chrono für bessere Genauigkeit
+    auto start_total = std::chrono::high_resolution_clock::now();
 
     // 1. Datei-Objekte erzeugen
     File file1(files[0]);
@@ -122,7 +123,7 @@ int main(int argc, char** argv)
 
     //m_Storage_tokenization_mngr->loadTokenList("../data/festplatten_schnittstellen.tokenz")
 
-    int start = clock();
+    auto start = std::chrono::high_resolution_clock::now();
 
     // 2. Multi-Threaded Parsing für alle Datasets
     dataSet<single_t>* dataSet1 = parser_mngr.parse_multithreaded<single_t>(file1.data(), file1.size(), file1.line_count(), "%_,%V", maxThreads);
@@ -141,10 +142,11 @@ int main(int argc, char** argv)
     printf("Parsed %zu lines from file4\n", dataSetSol2->size);
     //print_Dataset(*dataSetSol2, "%d,%d");
 
-    int elapsedParse = clock() - start;
-    printf("time elapsed for reading Files: %.2f s\n", elapsedParse / (float)CLOCKS_PER_SEC);
+    auto elapsedParse = std::chrono::high_resolution_clock::now() - start;
+    printf("time elapsed for reading Files: %.2f s\n", 
+           std::chrono::duration<double>(elapsedParse).count());
     printf("\n\n================================================================================================================================\n\n");
-    start = clock();
+    start = std::chrono::high_resolution_clock::now();
     printf("tokenizing Data...\n");
 
     dataSet<laptop> *tokenized_laptops = m_Laptop_tokenization_mngr->tokenize_multithreaded(dataSet1, "%_,%V", maxThreads);
@@ -156,9 +158,10 @@ int main(int argc, char** argv)
     //tokenized_laptops->print();
     //tokenized_storage->print();
 
-    int elapsedTokenize = clock() - start;
+    auto elapsedTokenize = std::chrono::high_resolution_clock::now() - start;
     printf("\n\n==================================================================================================================================\n\n");
-    printf("time elapsed for tokenizing Datasets: %.2f s\n", elapsedParse / (float)CLOCKS_PER_SEC);
+    printf("time elapsed for tokenizing Datasets: %.2f s\n", 
+           std::chrono::duration<double>(elapsedTokenize).count());
     printf("generating Partitions...\n");
 
     dataSet<partition> *laptop_partitions = m_partitioning_laptop_mngr->create_partitions(tokenized_laptops, m_Laptop_tokenization_mngr, laptop_partition_hierarchy);
@@ -187,21 +190,27 @@ int main(int argc, char** argv)
 
     printf("\n\n==================================================================================================================================\n\n");
 
-    int elapsedBlock = clock() - start;
-    printf("time elapsed for generating Blocks: %.2f s\n", elapsedBlock / (float)CLOCKS_PER_SEC);
+    auto elapsedBlock = std::chrono::high_resolution_clock::now() - start;
+    printf("time elapsed for generating Blocks: %.2f s\n", 
+           std::chrono::duration<double>(elapsedBlock).count());
 
     printf("\n\n==================================================================================================================================\n\n");
 
-    start = clock();
+    start = std::chrono::high_resolution_clock::now();
 
     Matching_mngr<laptop> *m_matching_laptop_mngr = new Matching_mngr<laptop>(dataSet1->size);
     Matching_mngr<storage_drive> *m_matching_storage_mngr = new Matching_mngr<storage_drive>(dataSet2->size);
 
+    m_matching_laptop_mngr->prepare_all_jaccard_sets(tokenized_laptops);
+    m_matching_storage_mngr->prepare_all_jaccard_sets(tokenized_storage);
+
     printf("Starting duplicate detection within partitions...\n");
-    // Use simpler matching approach for better debugging
+    printf("Starting searching for duplicates of laptops.\n");
     dataSet<matching>* matchesDS1 = m_matching_laptop_mngr->identify_matches(laptop_partitions, maxThreads);
+    m_matching_laptop_mngr->apply_transitivity(matchesDS1, 0.85);
     printf("Starting searching for duplicates of storage devices.\n");
     dataSet<matching> *matchesDS2 = m_matching_storage_mngr->identify_matches(storage_partitions, maxThreads);
+    m_matching_storage_mngr->apply_transitivity(matchesDS2, 0.85);
 
     // Count actual matches (pairs)
     size_t total_laptop_matches = 0;
@@ -225,7 +234,7 @@ int main(int argc, char** argv)
     printf("\n-----------------------------------------------------------------------------------------------------------------------------\\nn");
 
     printf("\nDetailed Laptop Matches (Format: <id1,id2>):\n");
-    for (size_t i = 0; i < matchesDS2->size; i++)
+    for (size_t i = 0; i < matchesDS1->size; i++)
     {
         if (matchesDS1->data[i].size > 0)
         {
@@ -257,20 +266,23 @@ int main(int argc, char** argv)
     printf("\nFound %zu potential duplicates in laptop dataset (%zu partitions)\n", total_laptop_matches, matchesDS1->size);
     printf("Found %zu potential duplicates in storage dataset (%zu partitions)\n", total_storage_matches, matchesDS2->size);
 
-    int elapsedMatch = clock() - start;
-    printf("time elapsed for matching: %.2f s\n", elapsedMatch / (float)CLOCKS_PER_SEC);
+    auto elapsedMatch = std::chrono::high_resolution_clock::now() - start;
+    printf("time elapsed for matching: %.2f s\n", 
+           std::chrono::duration<double>(elapsedMatch).count());
 
-    start = clock();
+    start = std::chrono::high_resolution_clock::now();
 
     float DS1EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS1, dataSetSol1);
     float DS2EvaluationScore = m_evaluation_mngr->evaluateMatches(matchesDS2, dataSetSol2);
     
-    int elapsedEval = clock() - start;
-    printf("time elapsed for evaluation: %.2f s\n", elapsedEval / (float)CLOCKS_PER_SEC);
+    auto elapsedEval = std::chrono::high_resolution_clock::now() - start;
+    printf("time elapsed for evaluation: %.2f s\n", 
+           std::chrono::duration<double>(elapsedEval).count());
     printf("\n\n==================================================================================================================================\n\n");
 
-    int elapsedTotal = clock() - start_total;
-    printf("total time elapsed: %.2f s\n", elapsedTotal / (float)CLOCKS_PER_SEC);
+    auto elapsedTotal = std::chrono::high_resolution_clock::now() - start_total;
+    printf("total time elapsed: %.2f s\n", 
+           std::chrono::duration<double>(elapsedTotal).count());
     printf("\n\n==================================================================================================================================\n\n");
 
     //printf("Evaluation of Duplicate Detection within DataSet1: %f\n", DS1EvaluationScore);

@@ -22,7 +22,7 @@ public:
 
     // Konfigurationsparameter
     struct Config {
-        size_t size_threshold = 1000;      // Maximale Partitionsgröße
+        size_t size_threshold = 15000;      // Maximale Partitionsgröße
         bool verbose_logging = false;      // Detaillierte Ausgaben aktivieren
         double overlap_ratio = 0.2;        // 50% Überlappung bei finaler Aufteilung
         category filter_category = assembler_brand;      // Kategorie für die Partitionierung
@@ -181,7 +181,8 @@ public:
         }
         
         // Wenn es keine Token-Gruppen gibt, aber Einträge ohne Token-Information
-        if (result_partitions.empty() && !no_token_entries.empty()) {
+        if (result_partitions.empty() && !no_token_entries.empty()) 
+        {
             handleOnlyNoTokenEntries(no_token_entries, result_partitions);
         }
         
