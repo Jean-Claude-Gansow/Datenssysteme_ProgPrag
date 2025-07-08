@@ -24,14 +24,24 @@ public:
     struct Config {
         size_t size_threshold = 15000;      // Maximale Partitionsgröße
         bool verbose_logging = false;      // Detaillierte Ausgaben aktivieren
-        double overlap_ratio = 0.2;        // 50% Überlappung bei finaler Aufteilung
+        double overlap_ratio = 0.2;        // Überlappungsfaktor
         category filter_category = assembler_brand;      // Kategorie für die Partitionierung
     };
 
-    // Konstruktor
-    explicit Partitioning_mngr(const Config& config = Config()) : config(config) {
-        printf("Partitioning_mngr initialisiert mit Schwellwert %zu, Filter-Kategorie %d\n", 
-               config.size_threshold, config.filter_category);
+    // Neuer Konstruktor: Partitionierungsgröße und Overlap-Faktor als Parameter
+    Partitioning_mngr(size_t partition_size, double overlap_ratio, bool verbose = false, category filter_cat = assembler_brand)
+    {
+        config.size_threshold = partition_size;
+        config.overlap_ratio = overlap_ratio;
+        config.verbose_logging = verbose;
+        config.filter_category = filter_cat;
+        printf("Partitioning_mngr initialisiert mit Schwellwert %zu, Overlap %.2f, Filter-Kategorie %d\n", config.size_threshold, config.overlap_ratio, config.filter_category);
+    }
+
+    // Alternativer Konstruktor für Kompatibilität
+    explicit Partitioning_mngr(const Config& config = Config()) : config(config) 
+    {
+        printf("Partitioning_mngr initialisiert mit Schwellwert %zu, Filter-Kategorie %d\n", config.size_threshold, config.filter_category);
     }
 
     /**

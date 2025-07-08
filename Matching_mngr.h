@@ -6,6 +6,7 @@
 #include <vector>
 #include <mutex>
 #include <algorithm>
+#include <unordered_map>
 #include <atomic>
 #include <cmath>
 #include "DataTypes.h"
@@ -25,7 +26,6 @@ private:
 public:
     Matching_mngr(size_t unique_id_count) : unique_id_count(unique_id_count) 
     {    
-        printf("initializing match cache for %zu uinique IDs\n",unique_id_count);
         jaccard_cache = new std::unordered_set<uint32_t>*[unique_id_count];
         // Alle Einträge auf nullptr setzen
         for (size_t i = 0; i < unique_id_count; ++i) 
@@ -46,7 +46,6 @@ public:
             delete[] jaccard_cache;
             jaccard_cache = nullptr; // Setze Pointer auf nullptr
         }
-        printf("DEBUG: Matching_mngr destructor completed - All memory freed\n");
     }
 
     void prepare_all_jaccard_sets(dataSet<compType> *dataset)
@@ -233,12 +232,13 @@ public:
                 }
 
                 comparison_count++;
-
-                if (jaccard_compare(id_i, entry_i, id_j, entry_j) >= jaccard_threshhold) 
+                double jaccar_score = jaccard_compare(id_i, entry_i, id_j, entry_j);
+                if (jaccar_score >= jaccard_threshhold)
                 {
                     printf("[%lu == %lu]\n", id_i, id_j);
                     findingsBuffer->matches[match_count].data[0] = id_i;
                     findingsBuffer->matches[match_count].data[1] = id_j;
+                    findingsBuffer->matches[match_count].jaccard_index = jaccar_score;
                     match_count++;
                 }
                 
@@ -391,101 +391,275 @@ public:
         return result;
     }
 
-    void apply_transitivity(dataSet<matching>* matches, double threshold) 
+    void apply_transitivity(dataSet<matching> *matches, double threshold)
     {
-        if (!matches || !matches->data) return;
+        if (!matches || !matches->data)
+            return;
+
+        printf("Applying GLOBAL transitivity with threshold %.2f...\n", threshold);
         
-        printf("Applying transitivity with threshold %.2f...\n", threshold);
+        // Debug: Gesamtzahl der Matches
+        size_t total_matches = 0;
+        size_t matches_above_threshold = 0;
         
-        for (size_t i = 0; i < matches->size; i++) 
+        // Erstelle ein globales Mapping von Elementen zu ihren Matches für schnellen Zugriff
+        std::unordered_map<uintptr_t, std::vector<std::pair<uintptr_t, double>>> global_element_matches;
+        
+        // Leicht reduzierter Threshold für das Mapping und die Transitivität
+        double mapping_threshold = threshold * 0.9;  // 10% niedriger für mehr potentielle Matches
+        
+        printf("Step 1: Collecting all matches across all partitions...\n");
+        
+        // Erste Schleife: Sammle alle Matches aus allen Partitionen in das globale Mapping
+        for (size_t i = 0; i < matches->size; i++)
         {
-            matching& current_match = matches->data[i];
-            if (!current_match.matches || current_match.size == 0) continue;
+            matching &current_match = matches->data[i];
+            if (!current_match.matches || current_match.size == 0)
+                continue;
             
-            // Zuerst zählen, wie viele neue Matches wir erwarten
-            size_t new_matches_count = 0;
-            std::vector<match> new_matches;
+            total_matches += current_match.size;
             
+            // Zähle Matches über dem Threshold und zeige Beispiele an
             for (size_t j = 0; j < current_match.size; j++) 
             {
                 uintptr_t id_a = current_match.matches[j].data[0];
                 uintptr_t id_b = current_match.matches[j].data[1];
-                double jaccard_ab = current_match.matches[j].jaccard_index;
+                double jaccard_index = current_match.matches[j].jaccard_index;
                 
-                if (jaccard_ab >= threshold) 
+                if (jaccard_index >= threshold) {
+                    matches_above_threshold++;
+                    if (matches_above_threshold <= 5) {  // Zeige max. 5 Beispiele
+                        printf("Example high-jaccard match: %lu == %lu (%.3f)\n", 
+                              id_a, id_b, jaccard_index);
+                    }
+                }
+                
+                // Füge alle Matches in das globale Mapping ein (wir verwenden hier den reduzierten Threshold)
+                if (jaccard_index >= mapping_threshold) {
+                    global_element_matches[id_a].push_back({id_b, jaccard_index});
+                    global_element_matches[id_b].push_back({id_a, jaccard_index}); // Bidirektional speichern
+                }
+            }
+        }
+        
+        printf("Collected %zu total matches across all partitions\n", total_matches);
+        printf("Matches above threshold (%.2f): %zu (%.1f%%)\n", 
+               threshold, matches_above_threshold, 
+               (total_matches > 0) ? (matches_above_threshold * 100.0 / total_matches) : 0.0);
+        
+        // Debug: Größe des globalen Mappings
+        printf("Global mapping size: %zu unique entries\n", global_element_matches.size());
+        size_t total_connections = 0;
+        for (const auto &entry : global_element_matches) {
+            total_connections += entry.second.size();
+        }
+        printf("Total connections in global mapping: %zu\n", total_connections);
+        
+        printf("Step 2: Finding transitive matches across all partitions...\n");
+        
+        // Sammle alle neuen transitiven Matches in einer globalen Liste
+        std::vector<std::tuple<uintptr_t, uintptr_t, double, size_t>> global_transitive_matches;
+        // <id_a, id_c, jaccard_index, partition_index>
+        
+        size_t check_count = 0;
+        size_t found_count = 0;
+        
+        // Suche nach transitiven Beziehungen im globalen Mapping
+        for (const auto &elem_entry : global_element_matches)
+        {
+            uintptr_t id_a = elem_entry.first;
+            
+            if (elem_entry.second.empty()) {
+                continue;  // Überspringe Einträge ohne Verbindungen
+            }
+            
+            // Für jedes Element, mit dem id_a verknüpft ist
+            for (const auto &match_a : elem_entry.second)
+            {
+                uintptr_t id_b = match_a.first;
+                double jaccard_ab = match_a.second;
+                
+                // Für jedes Element, mit dem id_b verknüpft ist
+                auto it_b = global_element_matches.find(id_b);
+                if (it_b != global_element_matches.end() && !it_b->second.empty())
                 {
-                    // Suche nach Matches, bei denen id_b als erste ID vorkommt
-                    for (size_t k = 0; k < current_match.size; k++) 
+                    for (const auto &match_b : it_b->second)
                     {
-                        if (k == j) continue; // Vermeide Vergleich mit sich selbst
+                        uintptr_t id_c = match_b.first;
+                        double jaccard_bc = match_b.second;
                         
-                        uintptr_t id_b_next = current_match.matches[k].data[0];
-                        uintptr_t id_c = current_match.matches[k].data[1];
-                        double jaccard_bc = current_match.matches[k].jaccard_index;
+                        check_count++;
                         
-                        // Prüfe Transitivität: A ähnlich zu B, B ähnlich zu C => A ähnlich zu C
-                        if (id_b == id_b_next && jaccard_bc >= threshold && id_a != id_c) 
+                        // Überprüfe, ob ein transitives Match existieren sollte
+                        if (id_c != id_a && jaccard_bc >= mapping_threshold)
                         {
-                            // Prüfe, ob diese Kombination bereits existiert
+                            // Berechne für welche Partition das Match gilt
+                            // Hier: vereinfachte Annahme - füge es zur ersten Partition hinzu,
+                            // in der entweder id_a oder id_c vorkommt
+                            size_t target_partition = 0; // Default zur ersten Partition
+                            
+                            // Überprüfe, ob dieses Match bereits existiert (in jeder Partition)
                             bool already_exists = false;
-                            for (size_t m = 0; m < current_match.size; m++) {
-                                if ((current_match.matches[m].data[0] == id_a && 
-                                     current_match.matches[m].data[1] == id_c) ||
-                                    (current_match.matches[m].data[0] == id_c && 
-                                     current_match.matches[m].data[1] == id_a)) {
-                                    already_exists = true;
-                                    break;
+                            
+                            // Prüfe in allen bestehenden Matches aller Partitionen
+                            for (size_t p = 0; p < matches->size && !already_exists; p++)
+                            {
+                                matching &part_matches = matches->data[p];
+                                if (!part_matches.matches) continue;
+                                
+                                for (size_t m = 0; m < part_matches.size; m++)
+                                {
+                                    if ((part_matches.matches[m].data[0] == id_a &&
+                                         part_matches.matches[m].data[1] == id_c) ||
+                                        (part_matches.matches[m].data[0] == id_c &&
+                                         part_matches.matches[m].data[1] == id_a))
+                                    {
+                                        already_exists = true;
+                                        break;
+                                    }
                                 }
                             }
                             
-                            // Prüfe auch gegen bereits gefundene neue Matches
-                            for (const auto& nm : new_matches) {
-                                if ((nm.data[0] == id_a && nm.data[1] == id_c) ||
-                                    (nm.data[0] == id_c && nm.data[1] == id_a)) {
-                                    already_exists = true;
-                                    break;
+                            // Prüfe auch gegen die bereits gefundenen transitiven Matches
+                            if (!already_exists)
+                            {
+                                for (const auto &tm : global_transitive_matches)
+                                {
+                                    uintptr_t tm_a = std::get<0>(tm);
+                                    uintptr_t tm_c = std::get<1>(tm);
+                                    
+                                    if ((tm_a == id_a && tm_c == id_c) || (tm_a == id_c && tm_c == id_a))
+                                    {
+                                        already_exists = true;
+                                        break;
+                                    }
                                 }
                             }
                             
                             // Wenn nicht bereits vorhanden, füge neues transitives Match hinzu
-                            if (!already_exists) {
-                                match new_match;
-                                new_match.data[0] = id_a;
-                                new_match.data[1] = id_c;
-                                // Verwende den geringeren Jaccard-Index für das transitive Match
-                                new_match.jaccard_index = std::min(jaccard_ab, jaccard_bc);
-                                new_matches.push_back(new_match);
+                            if (!already_exists)
+                            {
+                                // Berechne den Jaccard-Index für das transitive Match
+                                double new_jaccard = std::min(jaccard_ab, jaccard_bc) * 0.95; // Leicht reduzierter Jaccard-Index
+                                
+                                // Bestimme die Partition, zu der das Match gehört
+                                // Suche nach der ersten Partition, die id_a oder id_c enthält
+                                for (size_t p = 0; p < matches->size; p++)
+                                {
+                                    matching &part_matches = matches->data[p];
+                                    if (!part_matches.matches) continue;
+                                    
+                                    bool found_in_partition = false;
+                                    for (size_t m = 0; m < part_matches.size; m++)
+                                    {
+                                        if (part_matches.matches[m].data[0] == id_a || 
+                                            part_matches.matches[m].data[1] == id_a ||
+                                            part_matches.matches[m].data[0] == id_c || 
+                                            part_matches.matches[m].data[1] == id_c)
+                                        {
+                                            target_partition = p;
+                                            found_in_partition = true;
+                                            break;
+                                        }
+                                    }
+                                    if (found_in_partition) break;
+                                }
+                                
+                                // Füge zum globalen transitiven Match-Array hinzu
+                                global_transitive_matches.push_back(std::make_tuple(id_a, id_c, new_jaccard, target_partition));
+                                found_count++;
+                                
+                                if (found_count <= 10) {  // Zeige die ersten 10 transitiven Matches
+                                    printf("New global transitive match: %lu -> %lu -> %lu (%.3f, %.3f -> %.3f) [Partition %zu]\n", 
+                                           id_a, id_b, id_c, jaccard_ab, jaccard_bc, new_jaccard, target_partition);
+                                }
+                                
+                                if (found_count % 100 == 0) {
+                                    printf("  Found %zu global transitive matches so far (checked %zu potential matches)\n",
+                                           found_count, check_count);
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+        
+        printf("Step 3: Adding %zu new transitive matches to partitions...\n", global_transitive_matches.size());
+        
+        // Zähler für hinzugefügte Matches pro Partition
+        std::vector<size_t> matches_per_partition(matches->size, 0);
+        
+        // Gruppiere die transitiven Matches nach Partitionen
+        std::unordered_map<size_t, std::vector<match>> partition_new_matches;
+        
+        for (const auto &tm : global_transitive_matches)
+        {
+            uintptr_t id_a = std::get<0>(tm);
+            uintptr_t id_c = std::get<1>(tm);
+            double jaccard = std::get<2>(tm);
+            size_t partition = std::get<3>(tm);
             
-            // Wenn neue transitive Matches gefunden wurden, erweitere das Array
-            if (!new_matches.empty()) {
-                size_t old_size = current_match.size;
-                size_t new_size = old_size + new_matches.size();
-                
-                match* new_array = new match[new_size];
-                
-                // Kopiere existierende Matches
+            match new_match;
+            new_match.data[0] = id_a;
+            new_match.data[1] = id_c;
+            new_match.jaccard_index = jaccard;
+            
+            partition_new_matches[partition].push_back(new_match);
+        }
+        
+        // Füge die neuen Matches zu den entsprechenden Partitionen hinzu
+        for (const auto &entry : partition_new_matches)
+        {
+            size_t partition = entry.first;
+            const std::vector<match> &new_matches = entry.second;
+            
+            if (partition >= matches->size) {
+                printf("Warning: Invalid partition index %zu, skipping %zu matches\n", 
+                       partition, new_matches.size());
+                continue;
+            }
+            
+            matching &current_match = matches->data[partition];
+            
+            // Wenn keine neuen Matches für diese Partition, überspringe
+            if (new_matches.empty()) continue;
+            
+            // Erstelle ein neues größeres Array
+            size_t old_size = current_match.size;
+            size_t new_size = old_size + new_matches.size();
+            
+            match *new_array = new match[new_size];
+            
+            // Kopiere existierende Matches
+            if (current_match.matches) {
                 memcpy(new_array, current_match.matches, old_size * sizeof(match));
-                
-                // Kopiere neue transitive Matches
-                for (size_t m = 0; m < new_matches.size(); m++) {
-                    new_array[old_size + m] = new_matches[m];
-                }
-                
-                // Ersetze das alte Array
-                delete[] current_match.matches;
-                current_match.matches = new_array;
-                current_match.size = new_size;
-                
-                printf("Partition %zu: Added %zu transitive matches\n", i, new_matches.size());
+            }
+            
+            // Kopiere neue transitive Matches
+            for (size_t m = 0; m < new_matches.size(); m++)
+            {
+                new_array[old_size + m] = new_matches[m];
+            }
+            
+            // Ersetze das alte Array
+            delete[] current_match.matches;
+            current_match.matches = new_array;
+            current_match.size = new_size;
+            
+            matches_per_partition[partition] = new_matches.size();
+        }
+        
+        // Ausgabe der Ergebnisse pro Partition
+        size_t total_transitive_matches = 0;
+        for (size_t i = 0; i < matches_per_partition.size(); i++) {
+            if (matches_per_partition[i] > 0) {
+                printf("Partition %zu: Added %zu transitive matches\n", i, matches_per_partition[i]);
+                total_transitive_matches += matches_per_partition[i];
             }
         }
         
-        printf("Transitivity application completed\n");
+        printf("Global transitivity application completed: Added %zu transitive matches in total\n", total_transitive_matches);
     }
 };
 #endif

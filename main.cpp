@@ -20,10 +20,10 @@
 
 std::string files[] =
 {
-    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_64k.csv",
-    "../data/Test_Datasets/Storage_Test-Datasets/storage_64k.csv",
-    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_64k_loesungen.csv",
-    "../data/Test_Datasets/Storage_Test-Datasets/storage_64k_loesungen.csv"
+    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_8k.csv",
+    "../data/Test_Datasets/Storage_Test-Datasets/storage_8k.csv",
+    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_8k_loesungen.csv",
+    "../data/Test_Datasets/Storage_Test-Datasets/storage_8k_loesungen.csv"
 };
 
 /*std::string files[] =
@@ -46,8 +46,8 @@ int main(int argc, char** argv)
 
     Tokenization_mngr<12, single_t, laptop> *m_Laptop_tokenization_mngr = new Tokenization_mngr<12, single_t, laptop>({"12","single_t","laptop"});
     Tokenization_mngr<12, quintupel, storage_drive> *m_Storage_tokenization_mngr = new Tokenization_mngr<12, quintupel, storage_drive>({"12","quintupel","storage_drive"});
-    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>();
-    Partitioning_mngr<quintupel,storage_drive,12> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,12>();
+    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>({15000,false,0.2,assembler_brand});
+    Partitioning_mngr<quintupel,storage_drive,12> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,12>({20000,false,0.4,assembler_brand});
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
     
     unsigned int figureOut = 0; //unknown by now, filling that in later
@@ -207,9 +207,11 @@ int main(int argc, char** argv)
     printf("Starting duplicate detection within partitions...\n");
     printf("Starting searching for duplicates of laptops.\n");
     dataSet<matching>* matchesDS1 = m_matching_laptop_mngr->identify_matches(laptop_partitions, maxThreads);
-    m_matching_laptop_mngr->apply_transitivity(matchesDS1, 0.85);
     printf("Starting searching for duplicates of storage devices.\n");
     dataSet<matching> *matchesDS2 = m_matching_storage_mngr->identify_matches(storage_partitions, maxThreads);
+    
+    printf("\nApplying global transitivity to all matches...\n");
+    m_matching_laptop_mngr->apply_transitivity(matchesDS1, 0.85);
     m_matching_storage_mngr->apply_transitivity(matchesDS2, 0.85);
 
     // Count actual matches (pairs)
@@ -229,46 +231,12 @@ int main(int argc, char** argv)
         printf("Partition %zu: %zu matches\n", i, matchesDS2->data[i].size);
         total_storage_matches += matchesDS2->data[i].size;
     }
-    
-   
-    printf("\n-----------------------------------------------------------------------------------------------------------------------------\\nn");
 
-    printf("\nDetailed Laptop Matches (Format: <id1,id2>):\n");
-    for (size_t i = 0; i < matchesDS1->size; i++)
-    {
-        if (matchesDS1->data[i].size > 0)
-        {
-            printf("Partition %zu Matches:\n", i);
-            for (size_t j = 0; j < matchesDS1->data[i].size; j++)
-            {
-                printf("  <%zu,%zu>\n",
-                       static_cast<size_t>(matchesDS1->data[i].matches[j].data[0]),
-                       static_cast<size_t>(matchesDS1->data[i].matches[j].data[1]));
-            }
-        }
-    }
-
-    printf("\n-----------------------------------------------------------------------------------------------------------------------------\n\n");
-
-    // Detaillierte Ausgabe der Storage-Drive Matches im Format <id1,id2>
-    printf("\nDetailed Storage Drive Matches (Format: <id1,id2>):\n");
-    for (size_t i = 0; i < matchesDS2->size; i++) {
-        if (matchesDS2->data[i].size > 0) {
-            printf("Partition %zu Matches:\n", i);
-            for (size_t j = 0; j < matchesDS2->data[i].size; j++) {
-                printf("  <%zu,%zu>\n", 
-                    static_cast<size_t>(matchesDS2->data[i].matches[j].data[0]),
-                    static_cast<size_t>(matchesDS2->data[i].matches[j].data[1]));
-            }
-        }
-    }
-
-    printf("\nFound %zu potential duplicates in laptop dataset (%zu partitions)\n", total_laptop_matches, matchesDS1->size);
-    printf("Found %zu potential duplicates in storage dataset (%zu partitions)\n", total_storage_matches, matchesDS2->size);
+    printf("\nFound %zu potential duplicates in laptop dataset (%zu partitions (not unique))\n", total_laptop_matches, matchesDS1->size);
+    printf("Found %zu potential duplicates in storage dataset (%zu partitions (not unique))\n", total_storage_matches, matchesDS2->size);
 
     auto elapsedMatch = std::chrono::high_resolution_clock::now() - start;
-    printf("time elapsed for matching: %.2f s\n", 
-           std::chrono::duration<double>(elapsedMatch).count());
+    printf("time elapsed for matching: %.2f s\n", std::chrono::duration<double>(elapsedMatch).count());
 
     start = std::chrono::high_resolution_clock::now();
 
