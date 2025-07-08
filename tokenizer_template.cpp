@@ -5,6 +5,7 @@ extern "C" size_t {{FUNC_NAME}} ({{TEMP_TYPE_IN}} *line, {{TEMP_TYPE_OUT}} *out,
 {
     
 {{FORMAT_CODE}}
+    out->descriptor = line;
     return 0;
 }
 

@@ -9,7 +9,7 @@
 #include <atomic>
 #include <cmath>
 #include "DataTypes.h"
-#include "debug_utils.h"
+#include <unordered_set>
 
 template<typename compType>
 class Matching_mngr {
@@ -17,11 +17,83 @@ private:
     // Keine match_counts mehr notwendig
     std::mutex match_mutex; // Für Thread-Sicherheit bei Bedarf
 
+    // Statisches Array für die Sets, die für den Jaccard-Vergleich verwendet werden
+    std::unordered_set<uint32_t>** jaccard_cache;
+    size_t unique_id_count;
+
 public:
-    Matching_mngr() {}
-    
-    ~Matching_mngr() {}
-    
+    Matching_mngr(size_t unique_id_count) : unique_id_count(unique_id_count) 
+    {    
+        printf("initializing match cache for %zu uinique IDs\n",unique_id_count);
+        jaccard_cache = new std::unordered_set<uint32_t>*[unique_id_count];
+        // Alle Einträge auf nullptr setzen
+        for (size_t i = 0; i < unique_id_count; ++i) {
+            jaccard_cache[i] = nullptr;
+        }
+    }
+
+    ~Matching_mngr() {
+        // Speicher der Sets freigeben
+        if (jaccard_cache != nullptr) {
+            for (size_t i = 0; i < unique_id_count; ++i) {
+                if (jaccard_cache[i] != nullptr) {
+                    delete jaccard_cache[i];
+                }
+            }
+            delete[] jaccard_cache;
+        }
+    }
+
+    // Wrapper-Funktion für den Jaccard-Vergleich
+    bool jaccard_compare(uintptr_t id_i, compType* entry_i, uintptr_t id_j, compType* entry_j) {
+        // Überprüfen, ob die Einträge gültig sind
+        if (entry_i == nullptr || entry_j == nullptr) {
+            return false;
+        }
+
+        // Überprüfen, ob die IDs innerhalb des Bereichs liegen
+        if (id_i >= unique_id_count || id_j >= unique_id_count) {
+            fprintf(stderr, "Error: IDs out of range (%lu, %lu)\n", id_i, id_j);
+            return false;
+        }
+
+        // Überprüfen, ob die Sets bereits im Cache vorhanden sind
+        // Die bereits existierenden Buffer aus match_blocker_intern werden verwendet
+        if (jaccard_cache[id_i] == nullptr && entry_i->numeral_buffer != nullptr) {
+            jaccard_cache[id_i] = entry_i->generate_set(); // generate_set erstellt das Set
+        }
+
+        if (jaccard_cache[id_j] == nullptr && entry_j->numeral_buffer != nullptr) {
+            jaccard_cache[id_j] = entry_j->generate_set(); // generate_set erstellt das Set
+        }
+
+        // Prüfen, ob die Sets erfolgreich erstellt wurden
+        if (jaccard_cache[id_i] == nullptr || jaccard_cache[id_j] == nullptr) {
+            return false;
+        }
+
+        // Jaccard-Vergleich durchführen
+        const std::unordered_set<uint32_t>& set_i = *(jaccard_cache[id_i]);
+        const std::unordered_set<uint32_t>& set_j = *(jaccard_cache[id_j]);
+
+        // Vermeiden von Division durch Null
+        if (set_i.empty() && set_j.empty()) {
+            return false;
+        }
+
+        size_t intersection_size = 0;
+        for (const auto& elem : set_i) {
+            if (set_j.find(elem) != set_j.end()) {
+                intersection_size++;
+            }
+        }
+
+        size_t union_size = set_i.size() + set_j.size() - intersection_size;
+        double jaccard_index = static_cast<double>(intersection_size) / union_size;
+
+        return jaccard_index >= 0.93;
+    }
+
     void match_blocker_intern(
         partition* part, 
         size_t start, 
@@ -39,16 +111,34 @@ public:
             fprintf(stderr, "Error: Invalid parameters in match_blocker_intern\n");
             return;
         }
-        
-        uint32_t numeral_buffer1[200];
-        uint32_t numeral_buffer2[200];
+
+        // Statische Buffer für numerische Verarbeitung - explizit initialisiert
+        uint32_t numeral_buffer1[500];
+        uint32_t numeral_buffer2[500];
+
+        // Explizite Initialisierung aller Elemente auf 0
+        memset(numeral_buffer1, 0, sizeof(numeral_buffer1));
+        memset(numeral_buffer2, 0, sizeof(numeral_buffer2));
 
         // Maximale Kapazität des Buffers berechnen
         size_t range_size = end - start;
+        if (range_size == 0) {
+            return;  // Nichts zu tun
+        }
+        
         size_t max_possible_matches = (range_size * (range_size - 1)) / 2;
+        if (max_possible_matches == 0) {
+            return;  // Keine möglichen Matches
+        }
         
         // Temp-Puffer für die Matches erstellen
-        match* matches = new match[max_possible_matches]();
+        try {
+            findingsBuffer->matches = new match[max_possible_matches]();
+        } catch (const std::bad_alloc& e) {
+            fprintf(stderr, "Error: Memory allocation failed in match_blocker_intern\n");
+            return;
+        }
+        
         size_t match_count = 0;
         
         // Debug-Zähler
@@ -67,15 +157,15 @@ public:
                 compType* entry_j = reinterpret_cast<compType*>(part->data[j][1]);
 
                 comparison_count++;
-
+                
+                // Weise die numeral_buffer zu, bevor jaccard_compare aufgerufen wird
                 entry_i->numeral_buffer = numeral_buffer1;
-                entry_j->numeral_buffer = numeral_buffer1;
+                entry_j->numeral_buffer = numeral_buffer2;
 
-                if ((*entry_i | *entry_j) >= 0.85 && match_count < max_possible_matches)
-                {
-                    // Match speichern
-                    matches[match_count].data[0] = id_i;
-                    matches[match_count].data[1] = id_j;
+                if (jaccard_compare(id_i, entry_i, id_j, entry_j)) {
+                    printf("[%lu == %lu]\n", id_i, id_j);
+                    findingsBuffer->matches[match_count].data[0] = id_i;
+                    findingsBuffer->matches[match_count].data[1] = id_j;
                     match_count++;
                 }
                 
@@ -84,22 +174,13 @@ public:
         
         // Ergebnisse in den findingsBuffer kopieren
         findingsBuffer->size = match_count;
-        if (match_count > 0) {
-            findingsBuffer->matches = new match[match_count];
-            memcpy(findingsBuffer->matches, matches, match_count * sizeof(match));
-            
-            // Validierung nach dem Kopieren für zusätzliche Sicherheit
-            for (size_t i = 0; i < match_count; i++) {
-                if (findingsBuffer->matches[i].data[0] == 0 || findingsBuffer->matches[i].data[1] == 0) {
-                    fprintf(stderr, "Error: Invalid match found after copy at index %zu\n", i);
-                }
-            }
-        } else {
-            findingsBuffer->matches = nullptr;
+        // Optional: Speicher auf exakte Größe reduzieren
+        if (match_count < max_possible_matches) {
+            match* resized = new match[match_count];
+            memcpy(resized, findingsBuffer->matches, match_count * sizeof(match));
+            delete[] findingsBuffer->matches;
+            findingsBuffer->matches = resized;
         }
-        
-        // Aufräumen
-        delete[] matches;
     }
 
     dataSet<matching>* identify_matches(dataSet<partition>* input, size_t numThreads = 1)
@@ -130,7 +211,7 @@ public:
             }
             
             // Berechne optimale Partitionierung für Multi-Threading
-            size_t* offsets = new size_t[numThreads + 1];
+            size_t* offsets = new size_t[numThreads + 1](); //auf 0 initialisieren
             offsets[0] = 0;
             offsets[numThreads] = part->size;
             

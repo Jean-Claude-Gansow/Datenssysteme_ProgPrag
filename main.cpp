@@ -10,7 +10,6 @@
 // #define DEBUG_LEVEL 3  // Full debugging (very verbose, + memory & full matching)
 
 #include "constants.h"
-#include "debug_utils.h"  // Include debugging utilities first
 #include "Evaluation_mngr.h"
 #include "partitioning_mngr.h"
 #include "Matching_mngr.h"
@@ -19,21 +18,21 @@
 #include "FileInput.h"
 #include "DataTypes.h"
 
-/*std::string files[] =
-{
-    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k.csv",
-    "../data/Test_Datasets/Storage_Test-Datasets/storage_600k.csv",
-    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k_loesungen.csv",
-    "../data/Test_Datasets/Storage_Test-Datasets/storage_600k_loesungen.csv"
-};*/
-
 std::string files[] =
+{
+    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_4k.csv",
+    "../data/Test_Datasets/Storage_Test-Datasets/storage_4k.csv",
+    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_4k_loesungen.csv",
+    "../data/Test_Datasets/Storage_Test-Datasets/storage_4k_loesungen.csv"
+};
+
+/*std::string files[] =
 {
     "../data/Z1.csv",
     "../data/Z2.csv",
     "../data/ZY1.csv",
     "../data/ZY2.csv"
-};
+};*/
 
 // Die Funktion ist jetzt in debug_utils.h definiert
 
@@ -49,8 +48,6 @@ int main(int argc, char** argv)
     Tokenization_mngr<12, quintupel, storage_drive> *m_Storage_tokenization_mngr = new Tokenization_mngr<12, quintupel, storage_drive>({"12","quintupel","storage_drive"});
     Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>();
     Partitioning_mngr<quintupel,storage_drive,12> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,12>();
-    Matching_mngr<laptop>* m_matching_laptop_mngr = new Matching_mngr<laptop>();
-    Matching_mngr<storage_drive> *m_matching_storage_mngr = new Matching_mngr<storage_drive>();
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
     
     unsigned int figureOut = 0; //unknown by now, filling that in later
@@ -196,6 +193,9 @@ int main(int argc, char** argv)
     printf("\n\n==================================================================================================================================\n\n");
 
     start = clock();
+
+    Matching_mngr<laptop> *m_matching_laptop_mngr = new Matching_mngr<laptop>(dataSet1->size);
+    Matching_mngr<storage_drive> *m_matching_storage_mngr = new Matching_mngr<storage_drive>(dataSet2->size);
 
     printf("Starting duplicate detection within partitions...\n");
     // Use simpler matching approach for better debugging

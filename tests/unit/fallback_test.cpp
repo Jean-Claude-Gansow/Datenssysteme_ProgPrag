@@ -52,7 +52,7 @@ dataSet<TestLaptop>* createTestDataset(size_t size) {
         // Füge einen Beschreibungstext hinzu
         char* desc = new char[100];
         sprintf(desc, "Test|Laptop|Description|%zu|", i);
-        ds->data[i].description = desc;
+        ds->data[i].descriptor = desc;
     }
     
     return ds;
@@ -131,7 +131,7 @@ bool testFallbackPath() {
     
     // Gib Speicher für Beschreibungen frei
     for (size_t i = 0; i < testData->size; i++) {
-        delete[] testData->data[i].description;
+        delete[] testData->data[i].descriptor;
     }
     delete[] testData->data;
     delete testData;
@@ -146,8 +146,8 @@ void testJaccardImplementation() {
     // Erstelle zwei Laptops mit bekannten Beschreibungen
     laptop l1, l2;
     
-    l1.description = strdup("Apple|MacBook|Pro|Intel|Core|i7|8GB|RAM|256GB|SSD");
-    l2.description = strdup("Apple|MacBook|Pro|Intel|Core|i5|16GB|RAM|512GB|SSD");
+    l1.descriptor = strdup("Apple|MacBook|Pro|Intel|Core|i7|8GB|RAM|256GB|SSD");
+    l2.descriptor = strdup("Apple|MacBook|Pro|Intel|Core|i5|16GB|RAM|512GB|SSD");
     
     // Erwartete Übereinstimmung: 6 gemeinsame Tokens aus 10 Gesamt-Tokens
     // Erwarteter Jaccard-Index: 6/14 = ~0.43
@@ -157,22 +157,22 @@ void testJaccardImplementation() {
     std::cout << "Erwarteter Bereich: 0.3 - 0.6" << std::endl;
     
     // Teste identische Beschreibungen
-    l2.description = strdup(l1.description);
+    l2.descriptor = strdup(l1.descriptor);
     similarity = l1 | l2;
     std::cout << "Jaccard-Ähnlichkeit (identisch): " << similarity << std::endl;
     std::cout << "Erwartet: 1.0" << std::endl;
     
     // Teste vollständig verschiedene Beschreibungen
-    free(l2.description);
-    l2.description = strdup("Dell|XPS|15|AMD|Ryzen|32GB|RAM|1TB|NVMe");
+    free(l2.descriptor);
+    l2.descriptor = strdup("Dell|XPS|15|AMD|Ryzen|32GB|RAM|1TB|NVMe");
     
     similarity = l1 | l2;
     std::cout << "Jaccard-Ähnlichkeit (verschieden): " << similarity << std::endl;
     std::cout << "Erwarteter Bereich: 0.0 - 0.2" << std::endl;
     
     // Aufräumen
-    free(l1.description);
-    free(l2.description);
+    free(l1.descriptor);
+    free(l2.descriptor);
 }
 
 int main() {

@@ -6,6 +6,7 @@ extern "C" size_t tokenizer_0_0 (single_t *line, laptop *out, Tokenization_mngr<
     
 	tkm->filter_tokens((char*)(line->data[0]), out);
 
+    out->descriptor = line;
     return 0;
 }
 

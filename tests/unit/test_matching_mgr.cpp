@@ -4,7 +4,7 @@
 #include <vector>
 #include "Matching_mngr.h"
 #include "DataTypes.h"
-#include "debug_utils.h"
+
 
 // Teststruktur für compType
 class TestCompType {

@@ -177,7 +177,7 @@ struct laptop
 
     size_t token_count; // Anzahl der Tokens mit Informationen (> 0)
     size_t id;
-    single_t* descriptor; // Pointer auf eine Zeichenkette, die die Beschreibung des Laptops enthält
+    char * descriptor; // Pointer auf eine Zeichenkette, die die Beschreibung des Laptops enthält
     uint32_t* numeral_buffer; //dont forget to link this before comparing
     uint32_t numNumerals = 0;
 
@@ -217,7 +217,7 @@ struct laptop
         return tokens[idx];
     }
 
-    /*int operator == (const laptop& other) const
+    int operator == (const laptop& other) const
     {
         //0 == nomatch
         //1 == ismatch
@@ -427,7 +427,7 @@ struct laptop
                     &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 112–119
                     &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&loop_whitespace, &&sIntL, &&sIntL, &&sIntL, // 120–127
                 };
-            
+
             goto *jumpTableLoop[*p];
             uint32_t numeral;
                 //_|_|_|c-c-c-c ... |
@@ -477,11 +477,8 @@ struct laptop
         //count the tokens we got in common in both lists, without duplicates;
         //divide : (number of common tokens) by (number of all distinct tokens)
 
-        this->numNumerals = 0;
-        other.numNumerals = 0;
-
-        processString(reinterpret_cast<char*>(this->descriptor->data[0]),this);
-        processString(reinterpret_cast<char*>(other.descriptor->data[0]),&other);
+        processString(this->descriptor,this);
+        processString(other.descriptor,&other);
 
         std::unordered_set<uint32_t> numeralSet1(this->numeral_buffer, this->numeral_buffer+this->numNumerals);
         std::unordered_set<uint32_t> numeralSet2(other.numeral_buffer, other.numeral_buffer + other.numNumerals);
@@ -502,166 +499,24 @@ struct laptop
         size_t intersection_count = intersection.size();
         size_t union_count = unionSet.size();
         double jaccard_index = union_count > 0 ? static_cast<double>(intersection_count) / union_count : 0.0;
+
         return jaccard_index;
-    }*/
+    }
 
-
-    std::unordered_set<uint32_t>* generate_set() {
-        // Stelle sicher, dass der numeral_buffer korrekt verlinkt ist
-        auto processString = [&](char *str, laptop *obj)
-        {
-            char *p = str;
-            int tokenValue = 0;
-
-            const void *jumpTableLoop[256] =
-                {
-                    &&eol, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 0–7
-                    &&stn, &&stn, &&eol, &&stn, &&stn, &&stn, &&stn, &&stn,             // 8–15
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 16–23
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 24–31
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 32–39
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 40–47
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 48–55
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 56–63
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 64–71
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 72–79
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 80–87
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 88–95
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 96–103
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 104–111
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 112–119
-                    &&stn, &&stn, &&stn, &&stn, &&loop_whitespace, &&stn, &&stn, &&stn, // 120–127
-                };
-
-            const void *jumpTableFound8[256] =
-                {
-                    &&sChar, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,   // 0–7
-                    &&gt1char, &&gt1char, &&sChar, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,   // 8–15
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 16–23
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 24–31
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 32–39
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 40–47
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 48–55
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 56–63
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 64–71
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 72–79
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 80–87
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 88–95
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 96–103
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 104–111
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 112–119
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&sChar, &&gt1char, &&gt1char, &&gt1char,   // 120–127
-                };
-
-            const void *jumpTableFound16[256] =
-                {
-                    &&sShort, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,  // 0–7
-                    &&ge2char, &&ge2char, &&sShort, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,  // 8–15
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 16–23
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 24–31
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 32–39
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 40–47
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 48–55
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 56–63
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 64–71
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 72–79
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 80–87
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 88–95
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 96–103
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 104–111
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 112–119
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&sShort, &&ge2char, &&ge2char, &&ge2char,  // 120–127
-                };
-
-            const void *jumpTableFound24[256] =
-                {
-                    &&ssShort, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, // 0–7
-                    &&sIntL, &&sIntL, &&ssShort, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, // 8–15
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 16–23
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 24–31
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 32–39
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 40–47
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 48–55
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 56–63
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 64–71
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 72–79
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 80–87
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 88–95
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 96–103
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 104–111
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 112–119
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&ssShort, &&sIntL, &&sIntL, &&sIntL, // 120–127
-                };
-
-            const void *jumpTableIntLoop[256] =
-                {
-                    &&eol, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 0–7
-                    &&sIntL, &&sIntL, &&eol, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 8–15
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 16–23
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 24–31
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 32–39
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 40–47
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 48–55
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 56–63
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 64–71
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 72–79
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 80–87
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 88–95
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 96–103
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 104–111
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 112–119
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&loop_whitespace, &&sIntL, &&sIntL, &&sIntL, // 120–127
-                };
-
-            goto *jumpTableLoop[*p];
-            uint32_t numeral;
-            //_|_|_|c-c-c-c ... |
-
-        stn:
-            // save current destination
-            char *pos = p;
-            char roffset = 0;
-            goto *jumpTableFound8[*(++p)];  // if the next char after dest is a whitespace, jump to save char, to only save one char in a number
-        gt1char:                            // otherwise we will land here
-            goto *jumpTableFound16[*(++p)]; // if the 2nd byte after dst is a whitespace, jump to sShort for we got at least 2 letters we will take as 1 int with 16bit offset
-        ge2char:                            // otherwise we will land here
-            goto *jumpTableFound24[*(++p)]; // if the 3rd byte after dst is a whitespace, jump to ssShort for we got 3 letters we will take as 1 int with 8 bit offset
-        sIntL:                              // otherwise we got 4 or more letters in a row, therefor we loop_saveInt
-            numeral = *((uint32_t *)pos);   // get numeral at pos and increment pos for next possible step to be in a different position
-            pos++;
-            obj->numeral_buffer[obj->numNumerals] = numeral; // save numeral to buffer
-            obj->numNumerals++;                              // increment number of numerals for correct saving location and later work
-            goto *jumpTableIntLoop[*(++p)];                  // if the next byte is also not a whitespace, will land back here, otherwise will loop whitespace
-
-        sChar:
-            roffset = 24; // have a 24 offset ready for shift, and jump to save as integer;
-            goto sInt;
-        sShort: // save 2 byte in an integer by offsetting the current data >> 16
-            roffset = 16;
-            goto sInt;
-        ssShort: // save 3 byte in an int by offsetting the current data >> 8
-            roffset = 8;
-            goto sInt;
-        sInt:
-            numeral = *((uint32_t *)pos);
-            uint32_t onumeral = numeral >> roffset;                     // get data at destination for exactly the filed bytes we need
-            obj->numeral_buffer[obj->numNumerals] = (uint32_t)onumeral; // save the shifted numeral
-            obj->numNumerals++;                                         // increase for correct save location
-            goto *jumpTableLoop[*p];
-
-        loop_whitespace:
-            ++p;
-            goto *jumpTableLoop[*p];
-
-        eol:
-            return;
-        };
-
-        processString(reinterpret_cast<char *>(this->descriptor->data[0]), this);
-
-        // Erstelle ein Set aus dem numeral_buffer
-        std::unordered_set<uint32_t>* numeral_set = new std::unordered_set<uint32_t>(numeral_buffer, numeral_buffer + numNumerals);
-        return numeral_set;
+    // Qualitätsindex-Funktion
+    float quality_index() const {
+        // Länge des Beschreibungstextes als Basiswert
+        size_t desc_length = descriptor ? strlen(descriptor) : 0;
+        
+        // Berechne einen Informationsgehalt basierend auf vorhandenen Tokens
+        // und der Textnormierung
+        float token_quality = static_cast<float>(token_count) / 12.0f;  // Maximal 12 Token-Kategorien
+        
+        // Normalisierte Textlänge (typische Produktbeschreibungen sind 50-500 Zeichen)
+        float text_quality = std::min(1.0f, desc_length / 500.0f);
+        
+        // Kombinierter Qualitätsindex: 60% Token-basiert, 40% Textlänge
+        return (token_quality * 0.6f) + (text_quality * 0.4f);
     }
 }; 
 
@@ -726,7 +581,7 @@ struct storage_drive
         return tokens[idx];
     }
 
-    /*int operator==(storage_drive &other)
+    int operator==(storage_drive &other)
     {
         return (*this == static_cast<const storage_drive&>(other));
     }
@@ -888,165 +743,18 @@ struct storage_drive
     
         // Berechne den Jaccard-Index
         return union_count > 0 ? static_cast<double>(intersection_count) / union_count : 0.0;
-    }*/
+    }
 
-    std::unordered_set<uint32_t> *generate_set()
-    {
-        // Stelle sicher, dass der numeral_buffer korrekt verlinkt ist
-        auto processString = [&](char *str, storage_drive *obj)
-        {
-            char *p = str;
-            int tokenValue = 0;
-
-            const void *jumpTableLoop[256] =
-                {
-                    &&eol, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 0–7
-                    &&stn, &&stn, &&eol, &&stn, &&stn, &&stn, &&stn, &&stn,             // 8–15
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 16–23
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 24–31
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 32–39
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 40–47
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 48–55
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 56–63
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 64–71
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 72–79
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 80–87
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 88–95
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 96–103
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 104–111
-                    &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn, &&stn,             // 112–119
-                    &&stn, &&stn, &&stn, &&stn, &&loop_whitespace, &&stn, &&stn, &&stn, // 120–127
-                };
-
-            const void *jumpTableFound8[256] =
-                {
-                    &&sChar, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,   // 0–7
-                    &&gt1char, &&gt1char, &&sChar, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char,   // 8–15
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 16–23
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 24–31
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 32–39
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 40–47
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 48–55
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 56–63
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 64–71
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 72–79
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 80–87
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 88–95
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 96–103
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 104–111
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&gt1char, // 112–119
-                    &&gt1char, &&gt1char, &&gt1char, &&gt1char, &&sChar, &&gt1char, &&gt1char, &&gt1char,   // 120–127
-                };
-
-            const void *jumpTableFound16[256] =
-                {
-                    &&sShort, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,  // 0–7
-                    &&ge2char, &&ge2char, &&sShort, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char,  // 8–15
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 16–23
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 24–31
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 32–39
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 40–47
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 48–55
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 56–63
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 64–71
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 72–79
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 80–87
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 88–95
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 96–103
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 104–111
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&ge2char, // 112–119
-                    &&ge2char, &&ge2char, &&ge2char, &&ge2char, &&sShort, &&ge2char, &&ge2char, &&ge2char,  // 120–127
-                };
-
-            const void *jumpTableFound24[256] =
-                {
-                    &&ssShort, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, // 0–7
-                    &&sIntL, &&sIntL, &&ssShort, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, // 8–15
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 16–23
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 24–31
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 32–39
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 40–47
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 48–55
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 56–63
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 64–71
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 72–79
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 80–87
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 88–95
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 96–103
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 104–111
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,   // 112–119
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&ssShort, &&sIntL, &&sIntL, &&sIntL, // 120–127
-                };
-
-            const void *jumpTableIntLoop[256] =
-                {
-                    &&eol, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 0–7
-                    &&sIntL, &&sIntL, &&eol, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,             // 8–15
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 16–23
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 24–31
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 32–39
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 40–47
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 48–55
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 56–63
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 64–71
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 72–79
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 80–87
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 88–95
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 96–103
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 104–111
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&sIntL,           // 112–119
-                    &&sIntL, &&sIntL, &&sIntL, &&sIntL, &&loop_whitespace, &&sIntL, &&sIntL, &&sIntL, // 120–127
-                };
-
-            goto *jumpTableLoop[*p];
-            uint32_t numeral;
-            //_|_|_|c-c-c-c ... |
-
-        stn:
-            // save current destination
-            char *pos = p;
-            char roffset = 0;
-            goto *jumpTableFound8[*(++p)];  // if the next char after dest is a whitespace, jump to save char, to only save one char in a number
-        gt1char:                            // otherwise we will land here
-            goto *jumpTableFound16[*(++p)]; // if the 2nd byte after dst is a whitespace, jump to sShort for we got at least 2 letters we will take as 1 int with 16bit offset
-        ge2char:                            // otherwise we will land here
-            goto *jumpTableFound24[*(++p)]; // if the 3rd byte after dst is a whitespace, jump to ssShort for we got 3 letters we will take as 1 int with 8 bit offset
-        sIntL:                              // otherwise we got 4 or more letters in a row, therefor we loop_saveInt
-            numeral = *((uint32_t *)pos);   // get numeral at pos and increment pos for next possible step to be in a different position
-            pos++;
-            obj->numeral_buffer[obj->numNumerals] = numeral; // save numeral to buffer
-            obj->numNumerals++;                              // increment number of numerals for correct saving location and later work
-            goto *jumpTableIntLoop[*(++p)];                  // if the next byte is also not a whitespace, will land back here, otherwise will loop whitespace
-
-        sChar:
-            roffset = 24; // have a 24 offset ready for shift, and jump to save as integer;
-            goto sInt;
-        sShort: // save 2 byte in an integer by offsetting the current data >> 16
-            roffset = 16;
-            goto sInt;
-        ssShort: // save 3 byte in an int by offsetting the current data >> 8
-            roffset = 8;
-            goto sInt;
-        sInt:
-            numeral = *((uint32_t *)pos);
-            uint32_t onumeral = numeral >> roffset;                     // get data at destination for exactly the filed bytes we need
-            obj->numeral_buffer[obj->numNumerals] = (uint32_t)onumeral; // save the shifted numeral
-            obj->numNumerals++;                                         // increase for correct save location
-            goto *jumpTableLoop[*p];
-
-        loop_whitespace:
-            ++p;
-            goto *jumpTableLoop[*p];
-
-        eol:
-            return;
-        };
-
-        processString(reinterpret_cast<char *>(this->descriptor->data[0]), this);
-
-        // Erstelle ein Set aus dem numeral_buffer
-        std::unordered_set<uint32_t> *numeral_set = new std::unordered_set<uint32_t>(numeral_buffer, numeral_buffer + numNumerals);
-        return numeral_set;
+    // Qualitätsindex-Funktion
+    float quality_index() const {
+        // Da keine Textbeschreibung vorhanden ist, basieren wir auf descriptor
+        size_t desc_complexity = descriptor ? 1 : 0; //der desc ist ein 5 tupel aus string, flot, string, string und string, nutzen wir doch die summe der strlen aller felder. 
+        
+        // Berechne einen Informationsgehalt basierend auf vorhandenen Tokens
+        float token_quality = static_cast<float>(token_count) / 12.0f;  // Maximal 12 Token-Kategorien
+        
+        // Kombinierter Qualitätsindex: hauptsächlich Token-basiert
+        return (token_quality * 0.8f) + (desc_complexity * 0.2f);
     }
 };
 

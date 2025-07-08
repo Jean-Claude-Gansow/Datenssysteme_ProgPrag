@@ -22,7 +22,7 @@ public:
 
     // Konfigurationsparameter
     struct Config {
-        size_t size_threshold = 5000;      // Maximale Partitionsgröße
+        size_t size_threshold = 1000;      // Maximale Partitionsgröße
         bool verbose_logging = false;      // Detaillierte Ausgaben aktivieren
         double overlap_ratio = 0.2;        // 50% Überlappung bei finaler Aufteilung
         category filter_category = assembler_brand;      // Kategorie für die Partitionierung
