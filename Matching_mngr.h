@@ -661,5 +661,18 @@ public:
         
         printf("Global transitivity application completed: Added %zu transitive matches in total\n", total_transitive_matches);
     }
+    
+    /**
+     * @brief Setzt den Schwellwert für den Jaccard-Index
+     * @param threshold Ein Wert zwischen 0.0 und 1.0
+     */
+    void set_threshold(double threshold) {
+        if (threshold >= 0.0 && threshold <= 1.0) {
+            jaccard_threshhold = threshold;
+            printf("Jaccard-Threshold gesetzt auf: %.2f\n", jaccard_threshhold);
+        } else {
+            fprintf(stderr, "WARNUNG: Ungültiger Jaccard-Threshold (%.2f) - muss zwischen 0 und 1 liegen\n", threshold);
+        }
+    }
 };
 #endif

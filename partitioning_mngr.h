@@ -45,7 +45,9 @@ public:
     }
 
     /**
-     * @brief Erstellt einfache überlappende Partitionen aus einem Datensatz basierend auf einer Kategorie
+     * @brief Erstellt hierarchische Partitionen basierend auf mehreren Token-Kategorien
+     * @details Teilt die Daten hierarchisch nach jeder Kategorie auf. Unbekannte Tokens landen 
+     * in einer eigenen Subpartition, die dann weiter nach dem nächsten Token aufgeteilt wird.
      */
     dataSet<partition_t>* create_partitions(
         dataSet<InType>* input_data, 
@@ -54,7 +56,7 @@ public:
     {
         auto start_time = std::chrono::high_resolution_clock::now();
         
-        printf("🔍 Vereinfachte Partitionierung: Beginne mit %zu Einträgen...\n", input_data->size);
+        printf("🔍 Hierarchische Partitionierung: Beginne mit %zu Einträgen...\n", input_data->size);
         
         if (!input_data || input_data->size == 0) {
             printf("ℹ️ Leerer Eingabedatensatz, erstelle leeres Partitions-Set\n");
@@ -67,94 +69,28 @@ public:
             return createSinglePartition(input_data);
         }
 
-        // Wähle die Filterkategorie aus der Config oder nutze die erste Kategorie aus der Liste
-        category filter_cat = config.filter_category;
-        if (filter_cat < 0 && !categories.empty()) {
-            filter_cat = categories[0];
+        // Verwende die übergebenen Kategorien oder Fallback auf die Konfiguration
+        std::vector<category> used_categories;
+        if (!categories.empty()) {
+            used_categories = categories;
+        } else {
+            used_categories.push_back(config.filter_category);
         }
         
-        printf("🔍 Filtere nach Kategorie %d für die Partitionierung\n", filter_cat);
+        printf("🔍 Hierarchische Partitionierung mit %zu Kategorien\n", used_categories.size());
         
-        // Bestimme die Anzahl der möglichen Token-Werte für diese Kategorie
-        size_t num_tokens = tokenizer->m_class_tokens_found[filter_cat];
-        printf("   🔍 Kategorie %d hat %zu verschiedene Token-Werte\n", filter_cat, num_tokens);
-        
-        // Gruppiere Einträge nach Token-Wert
-        std::unordered_map<token, std::vector<std::pair<uintptr_t, InType*>>> token_groups;
-        std::vector<std::pair<uintptr_t, InType*>> no_token_entries;
-        
-        // Gruppiere alle Einträge nach ihrem Token-Wert
+        // Erstelle einen Vektor mit allen Einträgen aus dem Input-Datensatz
+        std::vector<std::pair<uintptr_t, InType*>> all_entries;
+        all_entries.reserve(input_data->size);
         for (size_t i = 0; i < input_data->size; i++) {
-            uintptr_t id = static_cast<uintptr_t>(i);
-            InType* entry = &input_data->data[i];
-            token tok = (*entry)[filter_cat];
-            
-            if (tok == 0) {
-                // Eintrag ohne Token-Information
-                no_token_entries.push_back({id, entry});
-            } else {
-                // Eintrag mit Token-Information
-                token_groups[tok].push_back({id, entry});
-            }
+            all_entries.emplace_back(static_cast<uintptr_t>(i), &input_data->data[i]);
         }
         
-        printf("   🔍 %zu Einträge gruppiert: %zu Gruppen mit Token-Info und %zu Einträge ohne Token\n", 
-               input_data->size, token_groups.size(), no_token_entries.size());
-        
-        // Vorbereitung für das Ergebnis
+        // Ergebnis-Partitionen
         std::vector<partition_t> result_partitions;
         
-        // 1. Erstelle vollständige Einträge mit Token-Info und kopiere die ohne Token-Info in jede Gruppe
-        std::vector<std::vector<std::pair<uintptr_t, InType*>>> complete_groups;
-        
-        // Verarbeite jede Token-Gruppe und füge Einträge ohne Token hinzu
-        for (const auto& group : token_groups) {
-            const auto& entries = group.second;
-            token tok = group.first;
-            
-            if (entries.empty()) continue;
-            
-            // Erstelle eine neue Gruppe mit Token-Einträgen und ohne Token-Einträgen
-            std::vector<std::pair<uintptr_t, InType*>> complete_group;
-            complete_group.reserve(entries.size() + no_token_entries.size());
-            
-            // Füge erst die Token-Einträge hinzu
-            complete_group.insert(complete_group.end(), entries.begin(), entries.end());
-            
-            // Dann die Einträge ohne Token
-            complete_group.insert(complete_group.end(), no_token_entries.begin(), no_token_entries.end());
-            
-            printf("   🔍 Token %d: %zu Einträge mit Token + %zu ohne Token = %zu Gesamt\n", 
-                   tok, entries.size(), no_token_entries.size(), complete_group.size());
-                   
-            complete_groups.push_back(std::move(complete_group));
-        }
-        
-        // 2. Verarbeite jede vollständige Gruppe und erstelle überlappende Partitionen wenn nötig
-        for (size_t g = 0; g < complete_groups.size(); g++) {
-            const auto& group = complete_groups[g];
-            
-            printf("   🔍 Verarbeite Gruppe %zu mit %zu Einträgen\n", g, group.size());
-            
-            if (group.size() <= config.size_threshold) {
-                // Wenn die Gruppe klein genug ist, erstelle eine einzelne Partition
-                partition_t part;
-                part.size = group.size();
-                part.capacity = group.size();
-                part.data = new pair[group.size()]();
-                
-                for (size_t i = 0; i < group.size(); i++) {
-                    part.data[i][0] = group[i].first;
-                    part.data[i][1] = reinterpret_cast<uintptr_t>(group[i].second);
-                }
-                
-                result_partitions.push_back(part);
-                printf("      ✓ Gruppe %zu: Einzelne Partition mit %zu Einträgen erstellt\n", g, group.size());
-            } else {
-                // Erstelle überlappende Partitionen für diese vollständige Gruppe
-                createOverlappingPartitionsForGroup(group, result_partitions);
-            }
-        }
+        // Starte die rekursive hierarchische Partitionierung
+        partitionHierarchically(all_entries, used_categories, 0, tokenizer, result_partitions);
         
         // Erstelle das Ergebnisdatenset
         dataSet<partition_t>* result = new dataSet<partition_t>();
@@ -169,7 +105,7 @@ public:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
         
-        printf("✅ Vereinfachte Partitionierung abgeschlossen: %zu Partitionen erstellt (%.2f Sekunden)\n", 
+        printf("✅ Hierarchische Partitionierung abgeschlossen: %zu Partitionen erstellt (%.2f Sekunden)\n", 
                result->size, duration / 1000.0);
         
         // Statistiken ausgeben
@@ -188,12 +124,6 @@ public:
             double avg_size = (result->size > 0) ? (double)total_size / result->size : 0;
             printf("📊 Statistik: Min=%zu, Max=%zu, Durchschnitt=%.1f Einträge pro Partition\n", 
                    min_size, max_size, avg_size);
-        }
-        
-        // Wenn es keine Token-Gruppen gibt, aber Einträge ohne Token-Information
-        if (result_partitions.empty() && !no_token_entries.empty()) 
-        {
-            handleOnlyNoTokenEntries(no_token_entries, result_partitions);
         }
         
         return result;
@@ -320,6 +250,96 @@ private:
         result->size = 0;
         result->data = nullptr;
         return result;
+    }
+    
+    /**
+     * @brief Rekursive Methode zur hierarchischen Partitionierung nach Token-Kategorien
+     */
+    void partitionHierarchically(
+        const std::vector<std::pair<uintptr_t, InType*>>& entries,
+        const std::vector<category>& categories,
+        size_t category_index,
+        Tokenizer* tokenizer,
+        std::vector<partition_t>& result_partitions)
+    {
+        // Abbruchbedingung: Wenn keine weiteren Kategorien verfügbar sind oder die Gruppe klein genug
+        if (category_index >= categories.size() || entries.size() <= config.size_threshold) {
+            if (entries.size() > 0) {
+                printf("   🔍 Erzeuge Endpartition mit %zu Einträgen (Kategorie-Index: %zu)\n", 
+                       entries.size(), category_index);
+                
+                // Erstelle überlappende Partitionen für diese Gruppe
+                createOverlappingPartitionsForGroup(entries, result_partitions);
+            }
+            return;
+        }
+        
+        // Aktuelle Kategorie für die Partitionierung
+        category current_cat = categories[category_index];
+        
+        printf("   🔍 Partitionierung nach Kategorie %d (Level %zu) für %zu Einträge\n", 
+               current_cat, category_index, entries.size());
+        
+        // Map zur Gruppierung von Einträgen nach Token-Wert
+        std::unordered_map<token, std::vector<std::pair<uintptr_t, InType*>>> token_groups;
+        // Spezielle Gruppe für "unbekannt" (Token = 0)
+        std::vector<std::pair<uintptr_t, InType*>> unknown_entries;
+        
+        // Gruppiere die Einträge nach dem Token-Wert für die aktuelle Kategorie
+        for (const auto& entry : entries) {
+            // Direkter Zugriff auf den Token-Wert über den Operator []
+            // Da current_cat ein enum ist und direkt als Index verwendet werden kann
+            token token_value = 0;
+            
+            // Sicherheitscheck: Ist die Kategorie im gültigen Bereich?
+            if (current_cat >= 0 && current_cat < N) {
+                token_value = (*entry.second)[current_cat]; // Verwende den [] Operator der InType-Struktur
+            }
+            
+            if (config.verbose_logging && token_value > 0) {
+                printf("        🔍 Eintrag %lu: Token-Wert für Kategorie %d ist %hu\n", 
+                       entry.first, current_cat, token_value);
+            }
+            
+            // Wenn Token unbekannt (0), in die unbekannt-Gruppe einsortieren
+            if (token_value == 0) {
+                unknown_entries.push_back(entry);
+            } else {
+                // Sonst zur entsprechenden Token-Gruppe hinzufügen
+                token_groups[token_value].push_back(entry);
+            }
+        }
+        
+        printf("      📊 %zu verschiedene Token-Gruppen gefunden, %zu Einträge ohne Token-Info\n", 
+               token_groups.size(), unknown_entries.size());
+        
+        // Verarbeite jede Token-Gruppe rekursiv mit der nächsten Kategorie
+        for (const auto& group_pair : token_groups) {
+            const auto& group = group_pair.second;
+            
+            // Debug-Ausgabe für große Gruppen
+            if (group.size() > config.size_threshold / 2) {
+                printf("      ⚠️ Große Gruppe mit Token %hu: %zu Einträge (%.1f%% des Schwellwerts)\n", 
+                       group_pair.first, group.size(), (group.size() * 100.0) / config.size_threshold);
+            }
+            
+            // Rekursiver Aufruf für die nächste Kategorie
+            partitionHierarchically(group, categories, category_index + 1, tokenizer, result_partitions);
+        }
+        
+        // Spezialfall: Verarbeite Einträge ohne Token-Information
+        if (!unknown_entries.empty()) {
+            printf("      ℹ️ Verarbeite %zu Einträge ohne Token-Info für Kategorie %d\n", 
+                   unknown_entries.size(), current_cat);
+            
+            if (category_index + 1 < categories.size()) {
+                // Wenn weitere Kategorien verfügbar sind, versuche nach der nächsten Kategorie zu partitionieren
+                partitionHierarchically(unknown_entries, categories, category_index + 1, tokenizer, result_partitions);
+            } else {
+                // Sonst erstelle eigene Partitionen für die unbekannten Einträge
+                handleOnlyNoTokenEntries(unknown_entries, result_partitions);
+            }
+        }
     }
 };
 

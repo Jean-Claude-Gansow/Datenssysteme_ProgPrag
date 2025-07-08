@@ -20,10 +20,10 @@
 
 std::string files[] =
 {
-    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_8k.csv",
-    "../data/Test_Datasets/Storage_Test-Datasets/storage_8k.csv",
-    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_8k_loesungen.csv",
-    "../data/Test_Datasets/Storage_Test-Datasets/storage_8k_loesungen.csv"
+    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k.csv",
+    "../data/Test_Datasets/Storage_Test-Datasets/storage_600k.csv",
+    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k_loesungen.csv",
+    "../data/Test_Datasets/Storage_Test-Datasets/storage_600k_loesungen.csv"
 };
 
 /*std::string files[] =
@@ -46,8 +46,11 @@ int main(int argc, char** argv)
 
     Tokenization_mngr<12, single_t, laptop> *m_Laptop_tokenization_mngr = new Tokenization_mngr<12, single_t, laptop>({"12","single_t","laptop"});
     Tokenization_mngr<12, quintupel, storage_drive> *m_Storage_tokenization_mngr = new Tokenization_mngr<12, quintupel, storage_drive>({"12","quintupel","storage_drive"});
-    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>({15000,false,0.2,assembler_brand});
-    Partitioning_mngr<quintupel,storage_drive,12> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,12>({20000,false,0.4,assembler_brand});
+    // Erstellung der Partitionierungs-Manager mit optimierten Parametern
+    // Für Laptops: kleinere Partitionen (10000) mit mittlerer Überlappung (0.25)
+    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>(25000, 0.5, false);
+    // Für Storage: größere Partitionen (15000) mit höherer Überlappung (0.35)
+    Partitioning_mngr<quintupel,storage_drive,12> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,12>(25000, 0.5, false);
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
     
     unsigned int figureOut = 0; //unknown by now, filling that in later
@@ -71,8 +74,22 @@ int main(int argc, char** argv)
     //rom_capacity: 3
     //
 
-    std::vector<category> laptop_partition_hierarchy = {assembler_brand};
-    std::vector<category> storage_partition_hierarchy = {assembler_brand};
+    // Erweiterte hierarchische Partitionierung für Laptops: Marke -> Prozessor -> Grafikkarte -> RAM/ROM
+    std::vector<category> laptop_partition_hierarchy = {
+        assembler_brand,  // Primäre Partitionierung nach Hersteller
+        cpu_brand,        // Sekundäre Partitionierung nach CPU-Hersteller
+        gpu_brand,        // Tertiäre Partitionierung nach GPU-Hersteller
+        ram_capacity      // Quaternäre Partitionierung nach RAM-Größe
+    };
+    
+    // Erweiterte hierarchische Partitionierung für Storage: Marke -> Kapazität -> Formfaktor -> Schnittstelle
+    std::vector<category> storage_partition_hierarchy = {
+        assembler_brand,   // Primäre Partitionierung nach Hersteller
+        storage_capacity,  // Sekundäre Partitionierung nach Speicherkapazität
+        formfactor,        // Tertiäre Partitionierung nach Formfaktor
+        connection_type    // Quaternäre Partitionierung nach Schnittstellentyp
+    };
+
     //TODO: Listenbäume aufbauen. Format: Token;Token;Token;...Token\n -> index = line
     //TODO: Listen zuusammenführen -> Klassenindices können erst dann korrekt gebaut werden.
     m_Laptop_tokenization_mngr->loadTokenList("../data/laptop_marken.tokenz",assembler_brand); //laptop brand
@@ -198,8 +215,19 @@ int main(int argc, char** argv)
 
     start = std::chrono::high_resolution_clock::now();
 
+    // Erstellen der Matching-Manager mit angepassten Jaccard-Schwellwerten
+    const double laptop_threshold = 0.85;  // Etwas strenger für Laptops
+    const double storage_threshold = 0.8;  // Etwas lockerer für Storage-Geräte
+    
+    printf("\nKonfiguriere Matching mit Jaccard-Schwellwerten: Laptops=%.2f, Storage=%.2f\n", 
+           laptop_threshold, storage_threshold);
+           
     Matching_mngr<laptop> *m_matching_laptop_mngr = new Matching_mngr<laptop>(dataSet1->size);
     Matching_mngr<storage_drive> *m_matching_storage_mngr = new Matching_mngr<storage_drive>(dataSet2->size);
+
+    // Setze die Jaccard-Schwellwerte für die Matching-Manager
+    m_matching_laptop_mngr->set_threshold(laptop_threshold);
+    m_matching_storage_mngr->set_threshold(storage_threshold);
 
     m_matching_laptop_mngr->prepare_all_jaccard_sets(tokenized_laptops);
     m_matching_storage_mngr->prepare_all_jaccard_sets(tokenized_storage);
@@ -210,9 +238,12 @@ int main(int argc, char** argv)
     printf("Starting searching for duplicates of storage devices.\n");
     dataSet<matching> *matchesDS2 = m_matching_storage_mngr->identify_matches(storage_partitions, maxThreads);
     
-    printf("\nApplying global transitivity to all matches...\n");
-    m_matching_laptop_mngr->apply_transitivity(matchesDS1, 0.85);
-    m_matching_storage_mngr->apply_transitivity(matchesDS2, 0.85);
+    printf("\nAnwenden der globalen Transitivität auf alle Matches mit optimierten Schwellwerten...\n");
+    printf("Laptop-Matches: Wende Transitivität mit Threshold %.2f an...\n", laptop_threshold);
+    m_matching_laptop_mngr->apply_transitivity(matchesDS1, laptop_threshold);
+    
+    printf("Storage-Matches: Wende Transitivität mit Threshold %.2f an...\n", storage_threshold);
+    m_matching_storage_mngr->apply_transitivity(matchesDS2, storage_threshold);
 
     // Count actual matches (pairs)
     size_t total_laptop_matches = 0;
