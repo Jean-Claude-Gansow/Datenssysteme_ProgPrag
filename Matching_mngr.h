@@ -109,12 +109,6 @@ public:
                         jaccard_cache[id] = new std::unordered_set<uint32_t>(); // Leeres Set erstellen
                     }
                 }
-
-                // Debug-Ausgabe mit reduzierter Häufigkeit
-                if (i % 5000 == 0 || i == dataset->size - 1)
-                {
-                    printf("Created set for ID %lu, size: %zu (%zu/%zu) - Total sets: %zu\n", id, jaccard_cache[id] ? jaccard_cache[id]->size() : 0, i + 1, dataset->size, sets_created);
-                }
             }
         }
 
@@ -220,22 +214,24 @@ public:
                 compType* entry_j = reinterpret_cast<compType*>(part->data[j][1]);
 
                 // Prüfen ob id_j innerhalb der Array-Grenzen liegt
-                if (id_j >= unique_id_count) {
+                /*if (id_j >= unique_id_count) 
+                {
                     fprintf(stderr, "Error: ID %lu out of bounds (max: %zu)\n", id_j, unique_id_count-1);
                     continue;
                 }
                 
                 // Prüfen ob die jaccard_cache-Einträge existieren
-                if (jaccard_cache[id_i] == nullptr || jaccard_cache[id_j] == nullptr) {
+                if (jaccard_cache[id_i] == nullptr || jaccard_cache[id_j] == nullptr)
+                {
                     fprintf(stderr, "Warning: Missing jaccard_cache for ID %lu or %lu\n", id_i, id_j);
                     continue;
-                }
+                }*/
 
                 comparison_count++;
                 double jaccar_score = jaccard_compare(id_i, entry_i, id_j, entry_j);
                 if (jaccar_score >= jaccard_threshhold)
                 {
-                    printf("[%lu == %lu]\n", id_i, id_j);
+                    //printf("[%lu == %lu]\n", id_i, id_j);
                     findingsBuffer->matches[match_count].data[0] = id_i;
                     findingsBuffer->matches[match_count].data[1] = id_j;
                     findingsBuffer->matches[match_count].jaccard_index = jaccar_score;
@@ -248,7 +244,8 @@ public:
         // Ergebnisse in den findingsBuffer kopieren
         findingsBuffer->size = match_count;
         // Optional: Speicher auf exakte Größe reduzieren
-        if (match_count < max_possible_matches) {
+        if (match_count < max_possible_matches) 
+        {
             match* resized = new match[match_count];
             memcpy(resized, findingsBuffer->matches, match_count * sizeof(match));
             delete[] findingsBuffer->matches;
@@ -259,7 +256,8 @@ public:
     dataSet<matching>* identify_matches(dataSet<partition>* input, size_t numThreads = 1)
     {
         // Überprüfen der Eingabe
-        if (input == nullptr || input->data == nullptr) {
+        if (input == nullptr || input->data == nullptr) 
+        {
             fprintf(stderr, "Error: Invalid input in identify_matches\n");
             return nullptr;
         }
@@ -277,16 +275,18 @@ public:
         size_t large_partitions = 0;
         for (size_t p = 0; p < num_partitions; p++) {
             partition* part = &input->data[p];
-            if (part != nullptr && part->data != nullptr && part->size > 100) {
+            if (part != nullptr && part->data != nullptr && part->size > 100) 
+            {
                 large_partitions++;
             }
         }
         
-        printf("Es gibt %zu große Partitionen, die Multi-Threading benötigen\n", large_partitions);
+        printf("Es gibt %zu große Partitionen, die Multi-Threading ermöglichen\n", large_partitions);
         
-        if (large_partitions <= numThreads && large_partitions > 0) {
+        if (large_partitions <= numThreads && large_partitions > 0) 
+        {
             // Strategie 1: Für jede große Partition alle/viele Threads verwenden
-            printf("Strategie: Parallele Verarbeitung der großen Partitionen\n");
+            printf("Starte Parallele Verarbeitung der großen Partitionen\n");
             
             size_t threads_per_partition = numThreads / large_partitions;
             if (threads_per_partition < 1) threads_per_partition = 1;
@@ -321,18 +321,15 @@ public:
                 }
                 current_partition++;
                 
-                printf("Partition %zu: Verwende %zu Threads für %zu Elemente\n", 
-                       p, partition_threads, part->size);
+                printf("Partition %zu: Verwende %zu Threads für %zu Elemente\n", p, partition_threads, part->size);
                 
                 // Quadratische/Dreiecksförmige Aufteilung statt linearer Aufteilung
                 // Berechne die Gesamtzahl der Vergleiche
                 size_t total_comparisons = (part->size * (part->size - 1)) / 2;
                 size_t comparisons_per_thread = total_comparisons / partition_threads;
                 
-                printf("  Partition mit %zu Elementen hat insgesamt %zu mögliche Vergleiche\n", 
-                       part->size, total_comparisons);
-                printf("  Angestrebt: ~%zu Vergleiche pro Thread für gleichmäßige Auslastung\n", 
-                       comparisons_per_thread);
+                printf("  Partition mit %zu Elementen hat insgesamt %zu mögliche Vergleiche\n", part->size, total_comparisons);
+                printf("  Angestrebt: ~%zu Vergleiche pro Thread für gleichmäßige Auslastung\n", comparisons_per_thread);
                 
                 // Offsets berechnen basierend auf der Anzahl der Vergleiche
                 size_t* offsets = new size_t[partition_threads + 1]();
@@ -357,14 +354,17 @@ public:
                 }
                 
                 // Validiere und passe die Offsets an
-                for (size_t t = 0; t < partition_threads; t++) {
-                    if (offsets[t] >= part->size) {
+                for (size_t t = 0; t < partition_threads; t++) 
+                {
+                    if (offsets[t] >= part->size) 
+                    {
                         offsets[t] = part->size;
                     }
                     
                     // Berechne die ungefähre Anzahl der Vergleiche für diesen Thread
                     size_t thread_comparisons = 0;
-                    for (size_t i = offsets[t]; i < offsets[t+1]; i++) {
+                    for (size_t i = offsets[t]; i < offsets[t+1]; i++) 
+                    {
                         thread_comparisons += (part->size - i - 1);
                     }
                     
@@ -378,16 +378,19 @@ public:
                 
                 // Neue Strategie: Jeder Thread bekommt eine eigene Range von Elementen i
                 // und vergleicht sie mit allen Elementen j > i im gesamten Array
-                for (size_t t = 0; t < partition_threads; t++) {
+                for (size_t t = 0; t < partition_threads; t++) 
+                {
                     size_t start_i = offsets[t];
                     size_t end_i = offsets[t+1];
                     
                     // Starte Thread nur, wenn es einen sinnvollen Bereich gibt
-                    if (start_i < end_i && end_i <= part->size) {
+                    if (start_i < end_i && end_i <= part->size) 
+                    {
                         printf("  Thread %zu: Vergleiche Elemente [%zu-%zu] mit nachfolgenden Elementen\n", 
                                t, start_i, end_i-1);
                                
-                        threads[t] = new std::thread([this, part, start_i, end_i, &thread_results, t]() {
+                        threads[t] = new std::thread([this, part, start_i, end_i, &thread_results, t]() 
+                        {
                             // Verbesserte Version von match_blocker_intern für Thread t
                             size_t range_size = end_i - start_i;
                             if (range_size == 0) return;
@@ -479,7 +482,6 @@ public:
                         }
                     }
                     
-                    printf("Partition %zu: Insgesamt %zu Matches gefunden\n", p, total_matches);
                 } else {
                     matching_buffer[p].matches = nullptr;
                 }
@@ -492,9 +494,7 @@ public:
                 delete[] offsets;
             }
         } else {
-            // Strategie 2: Verteile die Partitionen auf die Threads
-            printf("Strategie: Verteilung der Partitionen auf %zu Threads\n", numThreads);
-            
+            // Strategie 2: Verteile die Partitionen auf die Threads            
             // Gruppiere die Partitionen für Thread-Zuweisungen
             std::vector<std::vector<size_t>> thread_partitions(numThreads);
             size_t current_thread = 0;
@@ -526,8 +526,6 @@ public:
                 for (size_t p_idx : thread_partitions[t]) {
                     total_elements += input->data[p_idx].size;
                 }
-                printf("Thread %zu: %zu Partitionen mit insgesamt %zu Elementen\n", 
-                       t, thread_partitions[t].size(), total_elements);
             }
             
             // Starte Threads für die Verarbeitung
@@ -573,9 +571,6 @@ public:
     {
         if (!matches || !matches->data)
             return;
-
-        printf("Applying GLOBAL transitivity with threshold %.2f...\n", threshold);
-        
         // Debug: Gesamtzahl der Matches
         size_t total_matches = 0;
         size_t matches_above_threshold = 0;
@@ -584,9 +579,7 @@ public:
         std::unordered_map<uintptr_t, std::vector<std::pair<uintptr_t, double>>> global_element_matches;
         
         // Leicht reduzierter Threshold für das Mapping und die Transitivität
-        double mapping_threshold = threshold * 0.9;  // 10% niedriger für mehr potentielle Matches
-        
-        printf("Step 1: Collecting all matches across all partitions...\n");
+        double mapping_threshold = threshold * 1.1;  // 10% niedriger für mehr potentielle Matches
         
         // Erste Schleife: Sammle alle Matches aus allen Partitionen in das globale Mapping
         for (size_t i = 0; i < matches->size; i++)
@@ -603,38 +596,24 @@ public:
                 uintptr_t id_a = current_match.matches[j].data[0];
                 uintptr_t id_b = current_match.matches[j].data[1];
                 double jaccard_index = current_match.matches[j].jaccard_index;
-                
-                if (jaccard_index >= threshold) {
-                    matches_above_threshold++;
-                    if (matches_above_threshold <= 5) {  // Zeige max. 5 Beispiele
-                        printf("Example high-jaccard match: %lu == %lu (%.3f)\n", 
-                              id_a, id_b, jaccard_index);
-                    }
-                }
-                
+                                
                 // Füge alle Matches in das globale Mapping ein (wir verwenden hier den reduzierten Threshold)
-                if (jaccard_index >= mapping_threshold) {
+                if (jaccard_index >= mapping_threshold) 
+                {
                     global_element_matches[id_a].push_back({id_b, jaccard_index});
                     global_element_matches[id_b].push_back({id_a, jaccard_index}); // Bidirektional speichern
                 }
             }
         }
         
-        printf("Collected %zu total matches across all partitions\n", total_matches);
-        printf("Matches above threshold (%.2f): %zu (%.1f%%)\n", 
-               threshold, matches_above_threshold, 
-               (total_matches > 0) ? (matches_above_threshold * 100.0 / total_matches) : 0.0);
-        
         // Debug: Größe des globalen Mappings
-        printf("Global mapping size: %zu unique entries\n", global_element_matches.size());
+       
         size_t total_connections = 0;
-        for (const auto &entry : global_element_matches) {
+        for (const auto &entry : global_element_matches) 
+        {
             total_connections += entry.second.size();
         }
-        printf("Total connections in global mapping: %zu\n", total_connections);
-        
-        printf("Step 2: Finding transitive matches across all partitions...\n");
-        
+
         // Sammle alle neuen transitiven Matches in einer globalen Liste
         std::vector<std::tuple<uintptr_t, uintptr_t, double, size_t>> global_transitive_matches;
         // <id_a, id_c, jaccard_index, partition_index>
@@ -647,7 +626,8 @@ public:
         {
             uintptr_t id_a = elem_entry.first;
             
-            if (elem_entry.second.empty()) {
+            if (elem_entry.second.empty()) 
+            {
                 continue;  // Überspringe Einträge ohne Verbindungen
             }
             
@@ -718,7 +698,7 @@ public:
                             if (!already_exists)
                             {
                                 // Berechne den Jaccard-Index für das transitive Match
-                                double new_jaccard = std::min(jaccard_ab, jaccard_bc) * 0.95; // Leicht reduzierter Jaccard-Index
+                                double new_jaccard = std::min(jaccard_ab, jaccard_bc) * 1.1; // Leicht reduzierter Jaccard-Index
                                 
                                 // Bestimme die Partition, zu der das Match gehört
                                 // Suche nach der ersten Partition, die id_a oder id_c enthält
@@ -747,14 +727,9 @@ public:
                                 global_transitive_matches.push_back(std::make_tuple(id_a, id_c, new_jaccard, target_partition));
                                 found_count++;
                                 
-                                if (found_count <= 10) {  // Zeige die ersten 10 transitiven Matches
-                                    printf("New global transitive match: %lu -> %lu -> %lu (%.3f, %.3f -> %.3f) [Partition %zu]\n", 
-                                           id_a, id_b, id_c, jaccard_ab, jaccard_bc, new_jaccard, target_partition);
-                                }
-                                
-                                if (found_count % 100 == 0) {
-                                    printf("  Found %zu global transitive matches so far (checked %zu potential matches)\n",
-                                           found_count, check_count);
+                                if (found_count % 100 == 0) 
+                                {
+                                    printf("  Found %zu global transitive matches so far (checked %zu potential matches)\n", found_count, check_count);
                                 }
                             }
                         }
