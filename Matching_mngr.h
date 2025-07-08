@@ -21,7 +21,7 @@ private:
     // Statisches Array für die Sets, die für den Jaccard-Vergleich verwendet werden
     std::unordered_set<uint32_t>** jaccard_cache;
     size_t unique_id_count;
-    double jaccard_threshhold = 0.80;
+    double jaccard_threshhold = 0.80;  // Default-Schwellwert für den Jaccard-Index
 
 public:
     Matching_mngr(size_t unique_id_count) : unique_id_count(unique_id_count) 
@@ -269,66 +269,282 @@ public:
         size_t num_partitions = input->size;
         matching* matching_buffer = new matching[num_partitions]();
         
+        // Verwende zwei Strategien für Partitionen:
+        // 1. Für wenige große Partitionen: Teile jede Partition auf mehrere Threads auf
+        // 2. Für viele kleine Partitionen: Verteile die Partitionen auf die Threads
+        
+        // Zähle die Partitionen, die Multi-Threading benötigen
+        size_t large_partitions = 0;
         for (size_t p = 0; p < num_partitions; p++) {
             partition* part = &input->data[p];
-            
-            printf("Verarbeite Partition %zu: Größe=%zu, Daten=%p\n", p, 
-                   (part != nullptr) ? part->size : 0, 
-                   (part != nullptr) ? (void*)part->data : nullptr);
-            
-            // Sicherstellen, dass die Partition gültig ist
-            if (part == nullptr || part->data == nullptr || part->size <= 1) {
-                printf("Überspringe Partition %zu: Ungültige oder zu kleine Partition\n", p);
-                matching_buffer[p].size = 0;
-                matching_buffer[p].matches = nullptr;
-                continue;
+            if (part != nullptr && part->data != nullptr && part->size > 100) {
+                large_partitions++;
             }
+        }
+        
+        printf("Es gibt %zu große Partitionen, die Multi-Threading benötigen\n", large_partitions);
+        
+        if (large_partitions <= numThreads && large_partitions > 0) {
+            // Strategie 1: Für jede große Partition alle/viele Threads verwenden
+            printf("Strategie: Parallele Verarbeitung der großen Partitionen\n");
             
-            // Für kleine Partitionen oder wenn nur ein Thread gewünscht ist
-            if (part->size <= 100 || numThreads == 1) {
-                match_blocker_intern(part, 0, part->size, &matching_buffer[p]);
-                continue;
-            }
+            size_t threads_per_partition = numThreads / large_partitions;
+            if (threads_per_partition < 1) threads_per_partition = 1;
             
-            // Berechne optimale Partitionierung für Multi-Threading
-            size_t* offsets = new size_t[numThreads + 1](); //auf 0 initialisieren
-            offsets[0] = 0;
-            offsets[numThreads] = part->size;
-            
-            // Berechne die Thread-Grenzen (Quadratische Verteilung)
-            size_t total_comparisons = (part->size * (part->size - 1)) / 2;
-            size_t comparisons_per_thread = total_comparisons / numThreads;
-            size_t completed_comps = 0;
-            
-            for (size_t t = 1; t < numThreads; t++) {
-                size_t i = offsets[t-1];
-                while (i < part->size - 1) {
-                    size_t comps_in_row = part->size - i - 1;
-                    if (completed_comps + comps_in_row >= comparisons_per_thread * t) {
-                        size_t pos_in_row = comparisons_per_thread * t - completed_comps;
-                        if (pos_in_row < comps_in_row) {
-                            offsets[t] = i + 1;
-                            break;
+            size_t current_partition = 0;
+            for (size_t p = 0; p < num_partitions; p++) {
+                partition* part = &input->data[p];
+                
+                printf("Verarbeite Partition %zu: Größe=%zu, Daten=%p\n", p, 
+                       (part != nullptr) ? part->size : 0, 
+                       (part != nullptr) ? (void*)part->data : nullptr);
+                
+                // Sicherstellen, dass die Partition gültig ist
+                if (part == nullptr || part->data == nullptr || part->size <= 1) {
+                    printf("Überspringe Partition %zu: Ungültige oder zu kleine Partition\n", p);
+                    matching_buffer[p].size = 0;
+                    matching_buffer[p].matches = nullptr;
+                    continue;
+                }
+                
+                // Kleine Partitionen mit einem Thread verarbeiten
+                if (part->size <= 100) {
+                    match_blocker_intern(part, 0, part->size, &matching_buffer[p]);
+                    continue;
+                }
+                
+                // Große Partition mit mehreren Threads verarbeiten
+                size_t partition_threads = threads_per_partition;
+                if (current_partition == large_partitions - 1) {
+                    // Die letzte große Partition bekommt alle übrigen Threads
+                    partition_threads = numThreads - (current_partition * threads_per_partition);
+                }
+                current_partition++;
+                
+                printf("Partition %zu: Verwende %zu Threads für %zu Elemente\n", 
+                       p, partition_threads, part->size);
+                
+                // Quadratische/Dreiecksförmige Aufteilung statt linearer Aufteilung
+                // Berechne die Gesamtzahl der Vergleiche
+                size_t total_comparisons = (part->size * (part->size - 1)) / 2;
+                size_t comparisons_per_thread = total_comparisons / partition_threads;
+                
+                printf("  Partition mit %zu Elementen hat insgesamt %zu mögliche Vergleiche\n", 
+                       part->size, total_comparisons);
+                printf("  Angestrebt: ~%zu Vergleiche pro Thread für gleichmäßige Auslastung\n", 
+                       comparisons_per_thread);
+                
+                // Offsets berechnen basierend auf der Anzahl der Vergleiche
+                size_t* offsets = new size_t[partition_threads + 1]();
+                offsets[0] = 0;
+                offsets[partition_threads] = part->size;
+                
+                // Berechne die Positionen, bei denen jeder Thread starten soll
+                // basierend auf der kumulativen Anzahl der Vergleiche
+                size_t cumulative_comparisons = 0;
+                size_t next_thread = 1;
+                
+                // Formel für Dreiecksverteilung: Anzahl der Vergleiche für Element i = (n-i-1)
+                for (size_t i = 0; i < part->size && next_thread < partition_threads; i++) {
+                    size_t comparisons_for_i = part->size - i - 1;
+                    cumulative_comparisons += comparisons_for_i;
+                    
+                    // Wenn wir die Vergleichszahl für den nächsten Thread erreicht haben
+                    if (cumulative_comparisons >= comparisons_per_thread * next_thread) {
+                        offsets[next_thread] = i + 1;
+                        next_thread++;
+                    }
+                }
+                
+                // Validiere und passe die Offsets an
+                for (size_t t = 0; t < partition_threads; t++) {
+                    if (offsets[t] >= part->size) {
+                        offsets[t] = part->size;
+                    }
+                    
+                    // Berechne die ungefähre Anzahl der Vergleiche für diesen Thread
+                    size_t thread_comparisons = 0;
+                    for (size_t i = offsets[t]; i < offsets[t+1]; i++) {
+                        thread_comparisons += (part->size - i - 1);
+                    }
+                    
+                    printf("  Thread %zu: Elemente [%zu-%zu], ca. %zu Vergleiche (%.1f%% des Ideals)\n", 
+                           t, offsets[t], offsets[t+1]-1, thread_comparisons, 
+                           (comparisons_per_thread > 0) ? 
+                               (thread_comparisons * 100.0 / comparisons_per_thread) : 0.0);
+                }                // Verbesserte Version mit kompletter Matrix-Aufteilung
+                std::thread** threads = new std::thread*[partition_threads]();
+                matching* thread_results = new matching[partition_threads]();
+                
+                // Neue Strategie: Jeder Thread bekommt eine eigene Range von Elementen i
+                // und vergleicht sie mit allen Elementen j > i im gesamten Array
+                for (size_t t = 0; t < partition_threads; t++) {
+                    size_t start_i = offsets[t];
+                    size_t end_i = offsets[t+1];
+                    
+                    // Starte Thread nur, wenn es einen sinnvollen Bereich gibt
+                    if (start_i < end_i && end_i <= part->size) {
+                        printf("  Thread %zu: Vergleiche Elemente [%zu-%zu] mit nachfolgenden Elementen\n", 
+                               t, start_i, end_i-1);
+                               
+                        threads[t] = new std::thread([this, part, start_i, end_i, &thread_results, t]() {
+                            // Verbesserte Version von match_blocker_intern für Thread t
+                            size_t range_size = end_i - start_i;
+                            if (range_size == 0) return;
+                            
+                            // Maximale Matches abschätzen - es können mehr sein als in der ursprünglichen Version
+                            // da wir jetzt alle Elemente i mit allen j > i vergleichen
+                            size_t max_possible_matches = 0;
+                            for (size_t i = start_i; i < end_i; i++) {
+                                max_possible_matches += (part->size - i - 1);
+                            }
+                            
+                            if (max_possible_matches == 0) return;
+                            
+                            // Allokiere Ergebnispuffer
+                            thread_results[t].matches = new match[max_possible_matches]();
+                            size_t match_count = 0;
+                            
+                            // Durchlaufe alle zugewiesenen Elemente i
+                            for (size_t i = start_i; i < end_i; i++) {
+                                uintptr_t id_i = (uintptr_t)part->data[i][0];
+                                compType* entry_i = reinterpret_cast<compType*>(part->data[i][1]);
+                                
+                                if (id_i >= unique_id_count) continue;
+                                
+                                // Vergleiche mit ALLEN nachfolgenden Elementen j > i (nicht nur im eigenen Bereich)
+                                for (size_t j = i + 1; j < part->size; j++) {
+                                    uintptr_t id_j = (uintptr_t)part->data[j][0];
+                                    compType* entry_j = reinterpret_cast<compType*>(part->data[j][1]);
+                                    
+                                    if (id_j >= unique_id_count) continue;
+                                    if (jaccard_cache[id_i] == nullptr || jaccard_cache[id_j] == nullptr) continue;
+                                    
+                                    double jaccar_score = jaccard_compare(id_i, entry_i, id_j, entry_j);
+                                    if (jaccar_score >= jaccard_threshhold) {
+                                        if (match_count < max_possible_matches) {
+                                            thread_results[t].matches[match_count].data[0] = id_i;
+                                            thread_results[t].matches[match_count].data[1] = id_j;
+                                            thread_results[t].matches[match_count].jaccard_index = jaccar_score;
+                                            match_count++;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            thread_results[t].size = match_count;
+                            printf("  Thread %zu: Gefunden: %zu Matches\n", t, match_count);
+                            
+                            // Optional: Buffer auf exakte Größe reduzieren
+                            if (match_count < max_possible_matches) {
+                                match* resized = new match[match_count];
+                                memcpy(resized, thread_results[t].matches, match_count * sizeof(match));
+                                delete[] thread_results[t].matches;
+                                thread_results[t].matches = resized;
+                            }
+                        });
+                    } else {
+                        threads[t] = nullptr;
+                    }
+                }
+                
+                // Warte auf alle Threads
+                for (size_t t = 0; t < partition_threads; t++) {
+                    if (threads[t] && threads[t]->joinable()) {
+                        threads[t]->join();
+                        delete threads[t];
+                    }
+                }
+                delete[] threads;
+                
+                // Zähle die Gesamtzahl der Matches für die Allokation
+                size_t total_matches = 0;
+                for (size_t t = 0; t < partition_threads; t++) {
+                    total_matches += thread_results[t].size;
+                }
+                
+                // Ergebnispuffer für die Partition allozieren
+                matching_buffer[p].size = total_matches;
+                if (total_matches > 0) {
+                    matching_buffer[p].matches = new match[total_matches]();
+                    
+                    // Kopiere alle Matches
+                    size_t match_idx = 0;
+                    for (size_t t = 0; t < partition_threads; t++) {
+                        if (thread_results[t].matches != nullptr) {
+                            for (size_t i = 0; i < thread_results[t].size; i++) {
+                                matching_buffer[p].matches[match_idx] = thread_results[t].matches[i];
+                                match_idx++;
+                            }
                         }
                     }
-                    completed_comps += comps_in_row;
-                    i++;
-                    offsets[t] = i;
+                    
+                    printf("Partition %zu: Insgesamt %zu Matches gefunden\n", p, total_matches);
+                } else {
+                    matching_buffer[p].matches = nullptr;
+                }
+                
+                // Thread-Ergebnisse freigeben
+                for (size_t t = 0; t < partition_threads; t++) {
+                    delete[] thread_results[t].matches;
+                }
+                delete[] thread_results;
+                delete[] offsets;
+            }
+        } else {
+            // Strategie 2: Verteile die Partitionen auf die Threads
+            printf("Strategie: Verteilung der Partitionen auf %zu Threads\n", numThreads);
+            
+            // Gruppiere die Partitionen für Thread-Zuweisungen
+            std::vector<std::vector<size_t>> thread_partitions(numThreads);
+            size_t current_thread = 0;
+            
+            // Sortiere Partitionen nach Größe (absteigend)
+            std::vector<std::pair<size_t, size_t>> partition_sizes;  // <Größe, Index>
+            for (size_t p = 0; p < num_partitions; p++) {
+                partition* part = &input->data[p];
+                if (part != nullptr && part->data != nullptr && part->size > 1) {
+                    partition_sizes.push_back({part->size, p});
                 }
             }
             
-            // Erstelle Threads und Ergebnispuffer für jeden Thread
-            std::thread** threads = new std::thread*[numThreads]();
-            matching* thread_results = new matching[numThreads]();
+            std::sort(partition_sizes.begin(), partition_sizes.end(), 
+                     [](const auto& a, const auto& b) { return a.first > b.first; });
             
-            // Threads starten - einfacherer Code ohne match_counts
-            for (size_t t = 0; t < numThreads; t++) {
-                size_t start = offsets[t];
-                size_t end = offsets[t+1];
+            // Verteile die Partitionen nach dem Greedy-Prinzip auf die Threads
+            for (const auto& p : partition_sizes) {
+                size_t p_idx = p.second;
+                thread_partitions[current_thread].push_back(p_idx);
                 
-                if (start < end && end <= part->size) {
-                    threads[t] = new std::thread([this, part, start, end, &thread_results, t]() {
-                        match_blocker_intern(part, start, end, &thread_results[t]);
+                // Nächster Thread (Round Robin)
+                current_thread = (current_thread + 1) % numThreads;
+            }
+            
+            // Drucke die Verteilung
+            for (size_t t = 0; t < numThreads; t++) {
+                size_t total_elements = 0;
+                for (size_t p_idx : thread_partitions[t]) {
+                    total_elements += input->data[p_idx].size;
+                }
+                printf("Thread %zu: %zu Partitionen mit insgesamt %zu Elementen\n", 
+                       t, thread_partitions[t].size(), total_elements);
+            }
+            
+            // Starte Threads für die Verarbeitung
+            std::thread** threads = new std::thread*[numThreads]();
+            
+            for (size_t t = 0; t < numThreads; t++) {
+                if (!thread_partitions[t].empty()) {
+                    threads[t] = new std::thread([this, &input, &matching_buffer, &thread_partitions, t]() {
+                        // Verarbeite alle zugewiesenen Partitionen in diesem Thread
+                        for (size_t p_idx : thread_partitions[t]) {
+                            partition* part = &input->data[p_idx];
+                            if (part == nullptr || part->data == nullptr || part->size <= 1) {
+                                continue;
+                            }
+                            
+                            match_blocker_intern(part, 0, part->size, &matching_buffer[p_idx]);
+                        }
                     });
                 } else {
                     threads[t] = nullptr;
@@ -343,44 +559,6 @@ public:
                 }
             }
             delete[] threads;
-            
-            // Zähle die Gesamtzahl der Matches für die Allokation
-            size_t total_matches = 0;
-            for (size_t t = 0; t < numThreads; t++) {
-                total_matches += thread_results[t].size;
-            }
-            
-            // Ergebnispuffer für die Partition allozieren
-            matching_buffer[p].size = total_matches;
-            if (total_matches > 0) {
-                matching_buffer[p].matches = new match[total_matches]();
-                
-                // Kopiere alle Matches
-                size_t match_idx = 0;
-                for (size_t t = 0; t < numThreads; t++) {
-                    if (thread_results[t].matches != nullptr) {
-                        for (size_t i = 0; i < thread_results[t].size; i++) {
-                            matching_buffer[p].matches[match_idx] = thread_results[t].matches[i];
-                            match_idx++;
-                        }
-                    }
-                }
-                
-                // Überprüfe, ob alle Matches kopiert wurden
-                if (match_idx != total_matches) {
-                    fprintf(stderr, "Error: Match count mismatch after copying (%zu vs %zu)\n",
-                            match_idx, total_matches);
-                }
-            } else {
-                matching_buffer[p].matches = nullptr;
-            }
-            
-            // Thread-Ergebnisse freigeben
-            for (size_t t = 0; t < numThreads; t++) {
-                delete[] thread_results[t].matches;
-            }
-            delete[] thread_results;
-            delete[] offsets;
         }
         
         // Ergebnisse verpacken
@@ -663,15 +841,16 @@ public:
     }
     
     /**
-     * @brief Setzt den Schwellwert für den Jaccard-Index
-     * @param threshold Ein Wert zwischen 0.0 und 1.0
+     * Setzt den Schwellwert für den Jaccard-Index.
+     * Matches mit einem Jaccard-Index unter diesem Wert werden ignoriert.
      */
     void set_threshold(double threshold) {
-        if (threshold >= 0.0 && threshold <= 1.0) {
+        if (threshold > 0.0 && threshold <= 1.0) {
             jaccard_threshhold = threshold;
-            printf("Jaccard-Threshold gesetzt auf: %.2f\n", jaccard_threshhold);
+            printf("Jaccard-Schwellwert gesetzt auf: %.3f\n", jaccard_threshhold);
         } else {
-            fprintf(stderr, "WARNUNG: Ungültiger Jaccard-Threshold (%.2f) - muss zwischen 0 und 1 liegen\n", threshold);
+            fprintf(stderr, "Warnung: Ungültiger Jaccard-Schwellwert (%.3f), behalte aktuellen Wert (%.3f)\n", 
+                   threshold, jaccard_threshhold);
         }
     }
 };

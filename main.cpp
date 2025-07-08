@@ -18,13 +18,16 @@
 #include "FileInput.h"
 #include "DataTypes.h"
 
+//Jaccard-Schwellwerte
+const double laptop_threshold = 0.77; // Etwas strenger für Laptops
+const double storage_threshold = 0.80; // Etwas lockerer für Storage-Geräte
+
 std::string files[] =
-{
-    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k.csv",
-    "../data/Test_Datasets/Storage_Test-Datasets/storage_600k.csv",
-    "../data/Test_Datasets/Laptop_Test-Datasets/laptop_600k_loesungen.csv",
-    "../data/Test_Datasets/Storage_Test-Datasets/storage_600k_loesungen.csv"
-};
+    {
+        "../data/Test_Datasets/Laptop_Test-Datasets/laptop_250k.csv",
+        "../data/Test_Datasets/Storage_Test-Datasets/storage_4k.csv",
+        "../data/Test_Datasets/Laptop_Test-Datasets/laptop_250k_loesungen.csv",
+        "../data/Test_Datasets/Storage_Test-Datasets/storage_4k_loesungen.csv"};
 
 /*std::string files[] =
 {
@@ -48,9 +51,9 @@ int main(int argc, char** argv)
     Tokenization_mngr<12, quintupel, storage_drive> *m_Storage_tokenization_mngr = new Tokenization_mngr<12, quintupel, storage_drive>({"12","quintupel","storage_drive"});
     // Erstellung der Partitionierungs-Manager mit optimierten Parametern
     // Für Laptops: kleinere Partitionen (10000) mit mittlerer Überlappung (0.25)
-    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>(25000, 0.5, false);
+    Partitioning_mngr<single_t,laptop,12>* m_partitioning_laptop_mngr = new Partitioning_mngr<single_t,laptop,12>(5000, 0.5, false);
     // Für Storage: größere Partitionen (15000) mit höherer Überlappung (0.35)
-    Partitioning_mngr<quintupel,storage_drive,12> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,12>(25000, 0.5, false);
+    Partitioning_mngr<quintupel,storage_drive,12> *m_partitioning_storage_mngr = new Partitioning_mngr<quintupel,storage_drive,12>(5000, 0.5, false);
     Evaluation_mngr* m_evaluation_mngr = new Evaluation_mngr();
     
     unsigned int figureOut = 0; //unknown by now, filling that in later
@@ -215,10 +218,6 @@ int main(int argc, char** argv)
 
     start = std::chrono::high_resolution_clock::now();
 
-    // Erstellen der Matching-Manager mit angepassten Jaccard-Schwellwerten
-    const double laptop_threshold = 0.85;  // Etwas strenger für Laptops
-    const double storage_threshold = 0.8;  // Etwas lockerer für Storage-Geräte
-    
     printf("\nKonfiguriere Matching mit Jaccard-Schwellwerten: Laptops=%.2f, Storage=%.2f\n", 
            laptop_threshold, storage_threshold);
            
